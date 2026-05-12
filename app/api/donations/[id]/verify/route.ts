@@ -12,7 +12,10 @@ export async function POST(
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const userRole = (session.user as any).role;
@@ -49,6 +52,7 @@ export async function POST(
       });
 
       if (isVerifying) {
+        // Cash book entry
         const existingEntry = await tx.cashBook.findFirst({
           where: { donationCollectionId: id },
         });
@@ -68,6 +72,7 @@ export async function POST(
           });
         }
 
+        // Member cash ledger entry
         const existingLedgerEntry = await tx.memberCashLedger.findFirst({
           where: { referenceId: id, referenceType: "DonationCollection" },
         });
@@ -100,18 +105,19 @@ export async function POST(
                 jewelleryCode,
                 jewelleryName: item.description || `${item.donationType} Donation`,
                 metalType: item.donationType,
-                purity: item.purity || null,
                 weight: item.weight || 0,
-                estimatedValue: item.amount,
+                estimatedValue: item.amount || 0,
                 donorName: item.donorName,
                 receivedDate: donation.collectionDate,
                 description: `Received via Donation Collection #${donation.id}`,
+                donationCollectionId: id,   // ← Links back to this donation
               },
             });
           }
         }
       }
 
+      // Audit log
       await tx.auditLog.create({
         data: {
           userId: verifierId,
