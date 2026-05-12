@@ -175,7 +175,6 @@ export default function NewVoucherPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
     if (!voucherDate) {
       toast.error("Voucher date is required");
@@ -225,11 +224,6 @@ export default function NewVoucherPage() {
     setIsSubmitting(true);
 
     const selectedBank = bankAccounts?.find((a) => a.id === bankAccountId);
-
-    const categoryLabel =
-      voucherType === "PAYMENT"
-        ? PAYMENT_CATEGORIES.find((c) => c.value === category)?.label
-        : RECEIPT_CATEGORIES.find((c) => c.value === category)?.label;
 
     let finalDescription = description;
     if (paymentMethod !== "CASH" && selectedBank) {
@@ -822,7 +816,4 @@ export default function NewVoucherPage() {
       </form>
     </div>
   );
-}
-function setError(arg0: string) {
-  throw new Error("Function not implemented.");
 }
