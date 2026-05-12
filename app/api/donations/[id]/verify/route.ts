@@ -9,20 +9,15 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userRole = (session.user as any).role;
     const verifierId = (session.user as any).id;
 
-    // Only ADMIN and ACCOUNTANT can verify
     if (!["ADMIN", "ACCOUNTANT"].includes(userRole)) {
       return NextResponse.json(
         { error: "Forbidden - Only admins and accountants can verify" },
@@ -33,7 +28,6 @@ export async function POST(
     const body = await request.json();
     const isVerifying = body.verify;
 
-    // Get current financial year
     const currentFY = await prisma.financialYear.findFirst({
       where: { isCurrent: true },
     });
@@ -54,7 +48,6 @@ export async function POST(
         },
       });
 
-      // If verified, create cash book entry if it doesn't exist
       if (isVerifying) {
         const existingEntry = await tx.cashBook.findFirst({
           where: { donationCollectionId: id },
@@ -75,7 +68,6 @@ export async function POST(
           });
         }
 
-        // Update member cash ledger (Credit for donation collection)
         const existingLedgerEntry = await tx.memberCashLedger.findFirst({
           where: { referenceId: id, referenceType: "DonationCollection" },
         });
@@ -108,6 +100,7 @@ export async function POST(
                 jewelleryCode,
                 jewelleryName: item.description || `${item.donationType} Donation`,
                 metalType: item.donationType,
+                purity: item.purity || null,
                 weight: item.weight || 0,
                 estimatedValue: item.amount,
                 donorName: item.donorName,
@@ -119,7 +112,6 @@ export async function POST(
         }
       }
 
-      // Log audit
       await tx.auditLog.create({
         data: {
           userId: verifierId,
@@ -140,10 +132,10 @@ export async function POST(
   } catch (error: any) {
     console.error("Donation verification error:", error);
     return NextResponse.json(
-      { 
-        error: "Failed to verify donation", 
+      {
+        error: "Failed to verify donation",
         details: error.message,
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined 
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 }
     );
