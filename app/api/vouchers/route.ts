@@ -1,3 +1,4 @@
+// app/api/vouchers/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -22,6 +23,14 @@ const PaymentVoucherSchema = z.object({
   weight: z.number().optional(),
   purity: z.string().optional(),
 });
+
+// Categories that should instantly credit the bank account and be marked as APPROVED
+const INSTANT_POST_RECEIPT_CATEGORIES = [
+  "DIRECT_DEPOSIT",
+  "BANK_INTEREST",
+  "BANK_TRANSFER_RECEIVED",
+  "ONLINE_RECEIVED",
+];
 
 // Generate voucher number
 async function generateVoucherNumber(type: "PAYMENT" | "RECEIPT"): Promise<string> {
@@ -188,21 +197,64 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // ===== NEW: Auto‑post eligible receipts to the bank passbook =====
+      const shouldPostToBank =
+        validatedData.voucherType === "RECEIPT" &&
+        validatedData.bankAccountId &&
+        INSTANT_POST_RECEIPT_CATEGORIES.includes(validatedData.category ?? "");
+
+      if (shouldPostToBank) {
+        // 1. Create a credit transaction in the bank account
+        await tx.bankTransaction.create({
+          data: {
+            bankAccountId: validatedData.bankAccountId!,
+            amount: validatedData.amount,
+            type: "CREDIT",
+            description: `${v.voucherNumber} - ${validatedData.description}`,
+            voucherId: v.id,
+            transactionDate: new Date(validatedData.voucherDate),
+          },
+        });
+
+        // 2. Update the bank account's current balance
+        await tx.bankAccount.update({
+          where: { id: validatedData.bankAccountId! },
+          data: {
+            currentBalance: {
+              increment: validatedData.amount,
+            },
+          },
+        });
+
+        // 3. Mark the voucher as APPROVED instead of DRAFT
+        await tx.paymentVoucher.update({
+          where: { id: v.id },
+          data: { status: "APPROVED" },
+        });
+
+        // Re‑fetch the voucher so the response includes the updated status
+        const updatedVoucher = await tx.paymentVoucher.findUnique({
+          where: { id: v.id },
+          include: { payee: { select: { id: true, name: true, email: true } } },
+        });
+        if (updatedVoucher) {
+          v.status = updatedVoucher.status;
+          // Optionally merge other fields if needed, but status is the only change
+        }
+      }
+      // ===== End auto‑post block =====
+
       if (validatedData.voucherType === "RECEIPT" && validatedData.paymentMethod === "CHEQUE" && validatedData.referenceNumber) {
-        // Create a record for the received cheque
-        // If bankAccountId is provided, we assume it's deposited to that account.
-        // If not, we might need a default account or wait for deposit entry.
-        // For now, let's require bankAccountId for cheques in the UI or use a placeholder.
         if (validatedData.bankAccountId) {
           await tx.chequeRegister.create({
             data: {
               chequeNumber: validatedData.referenceNumber,
               chequeDate: validatedData.referenceDate ? new Date(validatedData.referenceDate) : new Date(validatedData.voucherDate),
               amount: validatedData.amount,
-              payeeName: "Temple Trust", // The trust is the payee for received cheques
+              payeeName: "Temple Trust",
               payerName: payee!.name,
               chequeType: "RECEIVED",
-              status: "DEPOSITED", // Assuming it's being deposited if account is selected
+              status: "DEPOSITED",
               accountId: validatedData.bankAccountId,
               financialYearId: currentFY?.id,
             },
@@ -211,8 +263,6 @@ export async function POST(request: NextRequest) {
       }
 
       if (selectedCheque) {
-        // Assign payee + amount to the cheque leaf, but keep it ISSUED
-        // The cheque will be marked CLEARED later via bank reconciliation / encashment
         await tx.chequeRegister.update({
           where: { id: selectedCheque.id },
           data: {
