@@ -4,22 +4,27 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
-const DonationItemSchema = z.object({
-  donorName: z.string().min(1),
-  amount: z.number().min(0).optional(),
-  donationType: z.enum(["Cash", "UPI", "Gold", "Silver"]),
-  weight: z.number().min(0).optional(),
-  purity: z.string().optional(),
-  description: z.string().optional(),
-}).refine((data) => {
-  if (data.donationType === "Gold" || data.donationType === "Silver") {
-    return data.weight !== undefined && data.weight > 0;
-  }
-  return data.amount !== undefined && data.amount > 0;
-}, {
-  message: "Weight required for metals, amount required for cash/UPI",
-  path: ["weight", "amount"],
-});
+const DonationItemSchema = z
+  .object({
+    donorName: z.string().min(1),
+    amount: z.number().min(0).optional(),
+    donationType: z.enum(["Cash", "UPI", "Gold", "Silver"]),
+    weight: z.number().min(0).optional(),
+    purity: z.string().optional(),
+    description: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.donationType === "Gold" || data.donationType === "Silver") {
+        return data.weight !== undefined && data.weight > 0;
+      }
+      return data.amount !== undefined && data.amount > 0;
+    },
+    {
+      message: "Weight required for metals, amount required for cash/UPI",
+      path: ["weight", "amount"],
+    }
+  );
 
 const DonationCollectionSchema = z.object({
   collectionDate: z.string().datetime(),
@@ -74,11 +79,12 @@ export async function POST(request: NextRequest) {
 
       // Create JewelleryAssets for Gold/Silver
       const metalItems = validatedData.donationItems.filter(
-        (item) => item.donationType === "Gold" || item.donationType === "Silver"
+        (i) => i.donationType === "Gold" || i.donationType === "Silver"
       );
 
       for (const item of metalItems) {
         const uniqueCode = `${item.donationType.charAt(0)}${Date.now().toString(36)}${Math.random().toString(36).substring(2, 6)}`.toUpperCase();
+
         await tx.jewelleryAsset.create({
           data: {
             jewelleryCode: uniqueCode,
@@ -97,7 +103,6 @@ export async function POST(request: NextRequest) {
       return donationCollection;
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         userId,
@@ -122,6 +127,45 @@ export async function POST(request: NextRequest) {
     console.error("Donation creation error:", error);
     return NextResponse.json(
       { error: "Failed to create donation collection" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userRole = session.user.role;
+    const userId = session.user.id;
+    const { searchParams } = new URL(request.url);
+    const financialYearId = searchParams.get("financialYearId");
+
+    const where: any = {};
+    if (userRole === "MEMBER") {
+      where.collectorId = userId;
+    }
+    if (financialYearId) {
+      where.financialYearId = financialYearId;
+    }
+
+    const donations = await prisma.donationCollection.findMany({
+      where,
+      include: {
+        donationItems: true,
+        collector: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json(donations);
+  } catch (error) {
+    console.error("Donation fetch error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch donations" },
       { status: 500 }
     );
   }
