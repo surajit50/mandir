@@ -11,98 +11,83 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2, Plus, Trash2, Coins, Gem, Banknote, Smartphone } from "lucide-react";
+import { Loader2, Coins, Gem, Banknote, Smartphone } from "lucide-react";
 import { toast } from "sonner";
-
-interface DonationItem {
-  id: string;
-  donorName: string;
-  amount: number;
-  donationType: "Cash" | "UPI" | "Gold" | "Silver";
-  weight?: number;
-  purity?: string;            // new: purity e.g. "22K", "925"
-  description: string;
-}
 
 export default function NewDonationPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [collectionDate, setCollectionDate] = useState(
-    new Date().toISOString().split("T")[0],
+    new Date().toISOString().split("T")[0]
   );
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<DonationItem[]>([
-    {
-      id: "1",
-      donorName: "",
-      amount: 0,
-      donationType: "Cash",
-      description: "",
-    },
-  ]);
 
-  const handleAddItem = () => {
-    setItems([
-      ...items,
-      {
-        id: Date.now().toString(),
-        donorName: "",
-        amount: 0,
-        donationType: "Cash",
-        description: "",
-      },
-    ]);
-  };
+  // Single item state – no array
+  const [donorName, setDonorName] = useState("");
+  const [amount, setAmount] = useState<number>(0);
+  const [donationType, setDonationType] = useState<"Cash" | "UPI" | "Gold" | "Silver">("Cash");
+  const [weight, setWeight] = useState<number | undefined>(undefined);
+  const [purity, setPurity] = useState<string | undefined>(undefined);
+  const [description, setDescription] = useState("");
 
-  const handleRemoveItem = (id: string) => {
-    if (items.length > 1) {
-      setItems(items.filter((item) => item.id !== id));
-    }
-  };
-
-  const handleItemChange = (id: string, field: string, value: any) => {
-    setItems(
-      items.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
-    );
-  };
+  const isPrecious = donationType === "Gold" || donationType === "Silver";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!collectionDate) {
       toast.error("Collection date is required");
       return;
     }
 
-    // Validation matching API: for Gold/Silver only weight is mandatory
-    const validItems = items.filter((item) => {
-      if (!item.donorName) return false;
-      if (item.donationType === "Gold" || item.donationType === "Silver") {
-        return (item.weight ?? 0) > 0;
-      }
-      return item.amount > 0;
-    });
-
-    if (validItems.length === 0) {
-      toast.error("Add at least one valid donation item");
+    // Validation: donor name required, weight required for metals, amount required for cash/upi
+    if (!donorName.trim()) {
+      toast.error("Donor name is required");
       return;
     }
 
+    if (isPrecious) {
+      if (!weight || weight <= 0) {
+        toast.error("Weight is required for gold/silver donations");
+        return;
+      }
+    } else {
+      if (amount <= 0) {
+        toast.error("Amount is required for cash/UPI donations");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
+
     try {
       const response = await fetch("/api/donations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           collectionDate: new Date(collectionDate).toISOString(),
-          donationItems: validItems.map(({ id, ...item }) => item),
-          remarks,
+          donationItems: [
+            {
+              donorName: donorName.trim(),
+              amount: isPrecious ? amount || 0 : amount,
+              donationType,
+              weight: isPrecious ? weight : undefined,
+              purity: purity || undefined,
+              description: description.trim() || undefined,
+            },
+          ],
+          remarks: remarks.trim() || undefined,
         }),
       });
+
       const data = await response.json();
+
       if (!response.ok) {
         toast.error(data.error || "Failed to create donation collection");
         return;
       }
+
       toast.success("Donation collection created successfully");
       router.push(`/dashboard/donations/${data.id}`);
     } catch (err) {
@@ -113,11 +98,6 @@ export default function NewDonationPage() {
     }
   };
 
-  const totalAmount = items.reduce((sum, item) => sum + (item.amount || 0), 0);
-  const itemCount = items.filter(
-    (i) => i.donorName && (i.amount > 0 || (i.weight ?? 0) > 0),
-  ).length;
-
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Page Header */}
@@ -125,11 +105,11 @@ export default function NewDonationPage() {
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">
           New Donation Collection
         </h1>
-        <p className="text-slate-500">Record a new collection with multiple donors</p>
+        <p className="text-slate-500">Record a single donation entry</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Info */}
+        {/* Collection Details */}
         <Card className="shadow-sm border-slate-200">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -168,220 +148,163 @@ export default function NewDonationPage() {
           </CardContent>
         </Card>
 
-        {/* Donation Items */}
+        {/* Single Donation Item */}
         <Card className="shadow-sm border-slate-200">
-          <CardHeader className="pb-4 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Plus className="w-5 h-5 text-emerald-600" />
-                Donation Items
-              </CardTitle>
-              <CardDescription>Add one entry per donor / instrument</CardDescription>
-            </div>
-            <span className="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-              {items.length} {items.length === 1 ? "item" : "items"}
-            </span>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Coins className="w-5 h-5 text-emerald-600" />
+              Donation Entry
+            </CardTitle>
+            <CardDescription>Donor and donation details</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {items.map((item, index) => {
-              const isPrecious = item.donationType === "Gold" || item.donationType === "Silver";
-              return (
-                <div
-                  key={item.id}
-                  className="group relative rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
-                >
-                  {/* Header badge */}
-                  <div className="absolute -top-3 left-4 flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 px-3 py-1 text-xs font-semibold text-white shadow">
-                    <span>Item {index + 1}</span>
-                  </div>
-
-                  {/* Remove button */}
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(item.id)}
-                      className="absolute -top-3 right-4 flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 transition"
-                      aria-label="Remove this item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+          <CardContent className="space-y-4">
+            {/* Row 1: Donor & Amount */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label htmlFor="donorName" className="text-xs font-medium text-slate-500">
+                  Donor Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  id="donorName"
+                  placeholder="e.g. Ramesh Kumar"
+                  value={donorName}
+                  onChange={(e) => setDonorName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="amount" className="text-xs font-medium text-slate-500">
+                  Amount (₹)
+                  {isPrecious ? (
+                    <span className="text-slate-400 ml-1">(optional)</span>
+                  ) : (
+                    <span className="text-red-500"> *</span>
                   )}
+                </label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="0"
+                  value={amount || ""}
+                  onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+                  required={!isPrecious}
+                />
+              </div>
+            </div>
 
-                  <div className="mt-2 space-y-4">
-                    {/* Row 1: Donor & Amount */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-500">
-                          Donor Name <span className="text-red-500">*</span>
-                        </label>
-                        <Input
-                          placeholder="e.g. Ramesh Kumar"
-                          value={item.donorName}
-                          onChange={(e) =>
-                            handleItemChange(item.id, "donorName", e.target.value)
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-500">
-                          Amount (₹)
-                          {isPrecious ? (
-                            <span className="text-slate-400 ml-1">(optional)</span>
-                          ) : (
-                            <span className="text-red-500"> *</span>
-                          )}
-                        </label>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          value={item.amount || ""}
-                          onChange={(e) =>
-                            handleItemChange(
-                              item.id,
-                              "amount",
-                              parseFloat(e.target.value) || 0,
-                            )
-                          }
-                          required={!isPrecious}
-                        />
-                      </div>
-                    </div>
+            {/* Row 2: Donation Type Segmented Control */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-500">
+                Donation Type
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="radiogroup">
+                {(["Cash", "UPI", "Gold", "Silver"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="radio"
+                    aria-checked={donationType === type}
+                    onClick={() => {
+                      setDonationType(type);
+                      // Reset weight/purity if switching away from metals
+                      if (type !== "Gold" && type !== "Silver") {
+                        setWeight(undefined);
+                        setPurity(undefined);
+                      }
+                    }}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                      donationType === type
+                        ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {type === "Cash" && <Banknote className="w-4 h-4" />}
+                    {type === "UPI" && <Smartphone className="w-4 h-4" />}
+                    {type === "Gold" && <Coins className="w-4 h-4" />}
+                    {type === "Silver" && <Gem className="w-4 h-4" />}
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                    {/* Row 2: Donation Type as Segmented Control */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-slate-500">
-                        Donation Type
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="radiogroup">
-                        {(["Cash", "UPI", "Gold", "Silver"] as const).map((type) => (
-                          <button
-                            key={type}
-                            type="button"
-                            role="radio"
-                            aria-checked={item.donationType === type}
-                            onClick={() => handleItemChange(item.id, "donationType", type)}
-                            className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
-                              item.donationType === type
-                                ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                            }`}
-                          >
-                            {type === "Cash" && <Banknote className="w-4 h-4" />}
-                            {type === "UPI" && <Smartphone className="w-4 h-4" />}
-                            {type === "Gold" && <Coins className="w-4 h-4" />}
-                            {type === "Silver" && <Gem className="w-4 h-4" />}
-                            {type}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+            {/* Row 3: Weight & Purity */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label htmlFor="weight" className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                  Weight (grams)
+                  {isPrecious && <span className="text-red-500">*</span>}
+                  {!isPrecious && <span className="text-slate-400">(not applicable)</span>}
+                </label>
+                <Input
+                  id="weight"
+                  type="number"
+                  placeholder="grams"
+                  value={weight || ""}
+                  onChange={(e) => setWeight(parseFloat(e.target.value) || undefined)}
+                  disabled={!isPrecious}
+                  className={!isPrecious ? "bg-slate-50 text-slate-400 cursor-not-allowed" : ""}
+                  required={isPrecious}
+                />
+              </div>
 
-                    {/* Row 3: Weight & Purity */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                          Weight (grams)
-                          {isPrecious && <span className="text-red-500">*</span>}
-                          {!isPrecious && (
-                            <span className="text-slate-400">(not applicable)</span>
-                          )}
-                        </label>
-                        <Input
-                          type="number"
-                          placeholder="grams"
-                          value={item.weight || ""}
-                          onChange={(e) =>
-                            handleItemChange(
-                              item.id,
-                              "weight",
-                              parseFloat(e.target.value) || 0,
-                            )
-                          }
-                          disabled={!isPrecious}
-                          className={
-                            !isPrecious
-                              ? "bg-slate-50 text-slate-400 cursor-not-allowed"
-                              : ""
-                          }
-                          required={isPrecious}
-                        />
-                      </div>
-
-                      {/* Purity – only for Gold/Silver */}
-                      {isPrecious ? (
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-slate-500">
-                            Purity <span className="text-slate-400">(optional)</span>
-                          </label>
-                          <select
-                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                            value={item.purity || ""}
-                            onChange={(e) =>
-                              handleItemChange(item.id, "purity", e.target.value)
-                            }
-                          >
-                            <option value="">Select purity</option>
-                            {item.donationType === "Gold" ? (
-                              <>
-                                <option value="22K">22K</option>
-                                <option value="24K">24K</option>
-                                <option value="18K">18K</option>
-                              </>
-                            ) : (
-                              <>
-                                <option value="925">925 (Sterling)</option>
-                                <option value="999">999 (Fine)</option>
-                                <option value="800">800</option>
-                              </>
-                            )}
-                          </select>
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-slate-500">
-                            Description
-                          </label>
-                          <Input
-                            placeholder="e.g. Special occasion"
-                            value={item.description}
-                            onChange={(e) =>
-                              handleItemChange(item.id, "description", e.target.value)
-                            }
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Row 4: Jewellery Name / Description (only for metals) */}
-                    {isPrecious && (
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-500">
-                          Jewellery Name / Description{" "}
-                          <span className="text-slate-400">(optional)</span>
-                        </label>
-                        <Input
-                          placeholder="e.g. Ring, chain, necklace"
-                          value={item.description}
-                          onChange={(e) =>
-                            handleItemChange(item.id, "description", e.target.value)
-                          }
-                        />
-                      </div>
+              {isPrecious ? (
+                <div className="space-y-1.5">
+                  <label htmlFor="purity" className="text-xs font-medium text-slate-500">
+                    Purity <span className="text-slate-400">(optional)</span>
+                  </label>
+                  <select
+                    id="purity"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    value={purity || ""}
+                    onChange={(e) => setPurity(e.target.value || undefined)}
+                  >
+                    <option value="">Select purity</option>
+                    {donationType === "Gold" ? (
+                      <>
+                        <option value="22K">22K</option>
+                        <option value="24K">24K</option>
+                        <option value="18K">18K</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="925">925 (Sterling)</option>
+                        <option value="999">999 (Fine)</option>
+                        <option value="800">800</option>
+                      </>
                     )}
-                  </div>
+                  </select>
                 </div>
-              );
-            })}
+              ) : (
+                <div className="space-y-1.5">
+                  <label htmlFor="description" className="text-xs font-medium text-slate-500">
+                    Description
+                  </label>
+                  <Input
+                    id="description"
+                    placeholder="e.g. Special occasion"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
 
-            <button
-              type="button"
-              onClick={handleAddItem}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 py-4 text-sm font-medium text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              Add Another Donor
-            </button>
+            {/* Row 4: Jewellery Name / Description (metals only) */}
+            {isPrecious && (
+              <div className="space-y-1.5">
+                <label htmlFor="jewelleryDesc" className="text-xs font-medium text-slate-500">
+                  Jewellery Name / Description{" "}
+                  <span className="text-slate-400">(optional)</span>
+                </label>
+                <Input
+                  id="jewelleryDesc"
+                  placeholder="e.g. Ring, chain, necklace"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -389,12 +312,9 @@ export default function NewDonationPage() {
         <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-lg transition-all duration-300 hover:shadow-xl">
           <CardContent className="flex items-center justify-between py-6">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-slate-500">Total Collection (Cash/UPI)</p>
+              <p className="text-sm font-medium text-slate-500">Total Amount</p>
               <p className="text-4xl font-bold text-blue-700">
-                ₹{totalAmount.toLocaleString()}
-              </p>
-              <p className="text-xs text-slate-400">
-                {itemCount} valid {itemCount === 1 ? "entry" : "entries"}
+                ₹{(amount || 0).toLocaleString()}
               </p>
             </div>
             <div className="hidden sm:block">
@@ -405,7 +325,7 @@ export default function NewDonationPage() {
           </CardContent>
         </Card>
 
-        {/* Action buttons */}
+        {/* Action Buttons */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 justify-end">
           <Button
             type="button"
