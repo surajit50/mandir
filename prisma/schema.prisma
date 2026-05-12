@@ -1,0 +1,913 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION MODELS
+// ============================================
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(MEMBER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  donations   DonationCollection[]
+  cashLedgers MemberCashLedger[]
+  handovers   CashHandover[]
+  payees      Payee[]
+  documents   Document[]
+
+  @@index([role])
+}
+
+model Payee {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String?
+  phone     String?
+  userId    String?  @db.ObjectId
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vouchers PaymentVoucher[]
+
+  @@index([name])
+  @@index([userId])
+}
+
+enum Role {
+  ADMIN
+  ACCOUNTANT
+  MEMBER
+}
+
+// ============================================
+// DONATION COLLECTION MODELS
+// ============================================
+
+model DonationCollection {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  collectorId String @db.ObjectId
+  collector   User   @relation(fields: [collectorId], references: [id], onDelete: Cascade)
+
+  collectionDate DateTime
+  totalAmount    Float     @default(0)
+  isVerified     Boolean   @default(false)
+  verifiedBy     String?   @db.ObjectId
+  verifiedAt     DateTime?
+
+  status  CollectionStatus @default(DRAFT)
+  remarks String?
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  donationItems DonationItem[]
+  cashBook      CashBook[]
+  receipt       DonationReceipt?
+
+  @@index([collectorId])
+  @@index([collectionDate])
+  @@index([status])
+}
+
+enum CollectionStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+model DonationItem {
+  id           String             @id @default(auto()) @map("_id") @db.ObjectId
+  collectionId String             @db.ObjectId
+  collection   DonationCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  donorName    String
+  amount       Float
+  donationType String // Cash, UPI, Gold, Silver, etc.
+  weight       Float? // Grams (for Gold/Silver)
+  description  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([collectionId])
+}
+
+// ============================================
+// MEMBER CASH LEDGER MODELS
+// ============================================
+
+model MemberCashLedger {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  memberId String @db.ObjectId
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  description     String
+  transactionDate DateTime
+  debitAmount     Float    @default(0)
+  creditAmount    Float    @default(0)
+  balance         Float    @default(0)
+
+  referenceType String? // DonationCollection, CashHandover, PaymentVoucher, etc.
+  referenceId   String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+  @@index([transactionDate])
+}
+
+// ============================================
+// CASH HANDOVER MODELS
+// ============================================
+
+model CashHandover {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  handoverDate     DateTime
+  handoverFrom     String   @db.ObjectId
+  handoverFromUser User     @relation(fields: [handoverFrom], references: [id], onDelete: Restrict)
+
+  totalAmount   Float
+  numberOfNotes Json? // { "2000": 5, "500": 10, etc. }
+
+  status     HandoverStatus @default(DRAFT)
+  approvedBy String?        @db.ObjectId
+  approvedAt DateTime?
+  remarks    String?
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  deliveryNotes CashDeliveryNote[]
+
+  @@index([handoverDate])
+  @@index([status])
+}
+
+enum HandoverStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model CashDeliveryNote {
+  id         String       @id @default(auto()) @map("_id") @db.ObjectId
+  handoverId String       @db.ObjectId
+  handover   CashHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+
+  deliveryDate DateTime
+  receivedBy   String   @db.ObjectId
+  amount       Float
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([handoverId])
+}
+
+// ============================================
+// PAYMENT VOUCHER & CASH BOOK MODELS
+// ============================================
+
+model PaymentVoucher {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  voucherNumber String   @unique
+  voucherDate   DateTime
+
+  voucherType VoucherType @default(PAYMENT)
+
+  payeeId String @db.ObjectId
+  payee   Payee  @relation(fields: [payeeId], references: [id], onDelete: Restrict)
+  amount  Float
+
+  description   String
+  paymentMethod PaymentMethod
+
+  // Transaction category for classification (Bank Interest, Bank Charges, etc.)
+  category String?
+
+  // Reference details for cheque numbers, UTR numbers, transaction refs, etc.
+  referenceNumber String?
+  referenceDate   DateTime?
+
+  // Jewellery details (for RECEIPT vouchers of jewellery donations)
+  metalType String? // Gold, Silver
+  weight    Float? // In Grams
+  purity    String? // 22K, 24K, 925, etc.
+
+  status     VoucherStatus @default(DRAFT)
+  approvedBy String?       @db.ObjectId
+  approvedAt DateTime?
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cashBook CashBook[]
+
+  @@index([voucherDate])
+  @@index([status])
+  @@index([payeeId])
+  @@index([voucherType])
+  @@index([category])
+}
+
+enum VoucherType {
+  PAYMENT
+  RECEIPT
+}
+
+enum PaymentMethod {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  ONLINE
+}
+
+enum VoucherStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model CashBook {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  date        DateTime
+  description String
+
+  debitAmount  Float @default(0)
+  creditAmount Float @default(0)
+  balance      Float @default(0)
+
+  referenceType String // DonationCollection, PaymentVoucher, ChequeDeposit, etc.
+  referenceId   String? @db.ObjectId
+
+  donationCollectionId String?             @db.ObjectId
+  donationCollection   DonationCollection? @relation(fields: [donationCollectionId], references: [id], onDelete: SetNull)
+
+  paymentVoucherId String?         @db.ObjectId
+  paymentVoucher   PaymentVoucher? @relation(fields: [paymentVoucherId], references: [id], onDelete: SetNull)
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([referenceType])
+}
+
+// ============================================
+// BANK ACCOUNT & DEPOSIT MODELS
+// ============================================
+
+model BankAccount {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  accountNumber String @unique
+  bankName      String
+  accountHolder String
+  accountType   String // Savings, Current, etc.
+
+  openingBalance Float @default(0)
+  currentBalance Float @default(0)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  deposits        BankDeposit[]
+  reconciliations BankReconciliation[]
+  cheques         ChequeRegister[]
+
+  @@index([bankName])
+}
+
+model BankDeposit {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  accountId String      @db.ObjectId
+  account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  depositNumber String      @unique
+  depositDate   DateTime
+  totalAmount   Float
+  depositType   DepositType
+  depositSlip   String?
+  remarks       String?
+
+  status         DepositStatus @default(PENDING)
+  verifiedByBank Boolean       @default(false)
+  verifiedAt     DateTime?
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  cheques ChequeRegister[]
+
+  @@index([accountId])
+  @@index([depositDate])
+  @@index([status])
+}
+
+enum DepositType {
+  CASH
+  CHEQUE
+  MIXED
+}
+
+enum DepositStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// ============================================
+// CHEQUE REGISTER MODELS
+// ============================================
+
+model ChequeRegister {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  accountId String      @db.ObjectId
+  account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  chequeNumber String
+  chequeDate   DateTime
+  amount       Float
+  payeeName    String
+  payerName    String? // Name of the person who gave us the cheque (for RECEIVED cheques)
+  chequeType   ChequeType @default(ISSUED)
+
+  status       ChequeStatus @default(ISSUED)
+  clearedDate  DateTime?
+  bounceDate   DateTime?
+  bounceReason String?
+
+  depositId String?      @db.ObjectId
+  deposit   BankDeposit? @relation(fields: [depositId], references: [id])
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, chequeNumber])
+  @@index([accountId])
+  @@index([status])
+  @@index([depositId])
+}
+
+enum ChequeStatus {
+  ISSUED
+  DEPOSITED
+  CLEARED
+  BOUNCED
+  CANCELLED
+}
+
+enum ChequeType {
+  ISSUED
+  RECEIVED
+}
+
+// ============================================
+// BANK RECONCILIATION MODELS
+// ============================================
+
+model BankReconciliation {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  accountId String      @db.ObjectId
+  account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  reconciliationDate DateTime
+  bankBalance        Float
+  bookBalance        Float
+  difference         Float
+
+  status     ReconciliationStatus @default(PENDING)
+  approvedBy String?              @db.ObjectId
+  approvedAt DateTime?
+  remarks    String?
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  reconciliationItems BankReconciliationItem[]
+
+  @@index([accountId])
+  @@index([reconciliationDate])
+}
+
+enum ReconciliationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model BankReconciliationItem {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  reconciliationId String             @db.ObjectId
+  reconciliation   BankReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+
+  itemType    String // Cheque, Deposit, Interest, Charge, etc.
+  referenceId String? @db.ObjectId
+  amount      Float
+  description String?
+
+  createdAt DateTime @default(now())
+
+  @@index([reconciliationId])
+}
+
+// ============================================
+// RECEIPT MANAGEMENT MODELS
+// ============================================
+
+model DonationReceipt {
+  id            String             @id @default(auto()) @map("_id") @db.ObjectId
+  receiptNumber String             @unique
+  donationId    String             @db.ObjectId
+  donation      DonationCollection @relation(fields: [donationId], references: [id], onDelete: Cascade)
+
+  receiptDate  DateTime
+  donorName    String
+  donorEmail   String?
+  donorPhone   String?
+  donorAddress String?
+
+  amount      Float
+  receiptType String // Regular, Provisional, Duplicate
+
+  isPrinted Boolean   @default(false)
+  printedAt DateTime?
+  printedBy String?   @db.ObjectId
+
+  acknowledgmentSent Boolean   @default(false)
+  acknowledgedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([donationId])
+  @@index([receiptDate])
+}
+
+// ============================================
+// GENERAL LEDGER MODELS
+// ============================================
+
+model GLAccount {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  accountCode String  @unique
+  accountName String
+  accountType String // Asset, Liability, Equity, Income, Expense
+  subType     String? // Current Asset, Fixed Asset, etc.
+
+  description    String?
+  openingBalance Float   @default(0)
+  currentBalance Float   @default(0)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  postings GLPosting[]
+
+  @@index([accountType])
+}
+
+model GLPosting {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  accountId String    @db.ObjectId
+  account   GLAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  postingDate DateTime
+  description String
+
+  debitAmount  Float @default(0)
+  creditAmount Float @default(0)
+
+  referenceType String // DonationCollection, PaymentVoucher, etc.
+  referenceId   String? @db.ObjectId
+
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([postingDate])
+}
+
+model TrialBalance {
+  id              String @id @default(auto()) @map("_id") @db.ObjectId
+  financialYearId String @db.ObjectId
+
+  accountId   String @db.ObjectId
+  accountCode String
+  accountName String
+  accountType String
+
+  openingBalance Float @default(0)
+  debits         Float @default(0)
+  credits        Float @default(0)
+  closingBalance Float @default(0)
+
+  generatedAt DateTime @default(now())
+
+  @@unique([financialYearId, accountId])
+  @@index([financialYearId])
+}
+
+// ============================================
+// FESTIVAL ACCOUNTING MODELS
+// ============================================
+
+model Festival {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  festivalName String
+  festivalDate DateTime
+  description  String?
+
+  budgetAmount Float   @default(0)
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  festivalTransactions FestivalTransaction[]
+
+  @@index([festivalDate])
+}
+
+model FestivalTransaction {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  festivalId String   @db.ObjectId
+  festival   Festival @relation(fields: [festivalId], references: [id], onDelete: Cascade)
+
+  transactionDate DateTime
+  description     String
+  transactionType String // Income, Expense
+
+  amount      Float
+  referenceId String? @db.ObjectId
+  remarks     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([festivalId])
+  @@index([transactionDate])
+}
+
+// ============================================
+// INVENTORY MANAGEMENT MODELS
+// ============================================
+
+model InventoryCategory {
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  categoryName String  @unique
+  description  String?
+
+  items InventoryItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryItem {
+  id         String            @id @default(auto()) @map("_id") @db.ObjectId
+  itemCode   String            @unique
+  categoryId String            @db.ObjectId
+  category   InventoryCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  itemName    String
+  description String?
+
+  quantity     Float  @default(0)
+  unit         String // Piece, Kg, Meter, etc.
+  reorderLevel Float  @default(0)
+
+  unitCost        Float     @default(0)
+  lastRestockDate DateTime?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  movements InventoryMovement[]
+
+  @@index([categoryId])
+}
+
+model InventoryMovement {
+  id     String        @id @default(auto()) @map("_id") @db.ObjectId
+  itemId String        @db.ObjectId
+  item   InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  movementDate DateTime
+  movementType String // In, Out, Adjustment
+
+  quantity Float
+  remarks  String?
+  movedBy  String  @db.ObjectId
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+  @@index([movementDate])
+}
+
+// ============================================
+// AUDIT LOG MODELS
+// ============================================
+
+model AuditLog {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  userId   String @db.ObjectId
+  userName String
+  userRole String
+
+  action String // CREATE, UPDATE, DELETE, APPROVE, REJECT
+  module String // DonationCollection, PaymentVoucher, etc.
+
+  entityId   String? @db.ObjectId
+  entityType String?
+
+  oldValues Json?
+  newValues Json?
+
+  ipAddress String?
+  userAgent String?
+
+  status       String // SUCCESS, FAILED
+  errorMessage String?
+
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([module])
+  @@index([timestamp])
+}
+
+// ============================================
+// NOTIFICATION MODELS
+// ============================================
+
+model NotificationTemplate {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  templateName String @unique
+  templateType String // APPROVAL_PENDING, VERIFICATION_COMPLETE, CHEQUE_CLEARED, etc.
+
+  emailSubject String
+  emailBody    String // HTML template with {{placeholders}}
+
+  smsTemplate String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  recipientId String @db.ObjectId
+
+  templateId   String @db.ObjectId
+  templateType String
+
+  subject String
+  message String
+
+  emailSent   Boolean   @default(false)
+  emailSentAt DateTime?
+
+  smsSent   Boolean   @default(false)
+  smsSentAt DateTime?
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  referenceType String?
+  referenceId   String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+
+  @@index([recipientId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================
+// FINANCIAL YEAR MODELS
+// ============================================
+
+model FinancialYear {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  yearCode String @unique // FY2024-25
+
+  startDate DateTime
+  endDate   DateTime
+
+  isCurrent Boolean @default(false)
+  isLocked  Boolean @default(false)
+
+  openingDate DateTime?
+  closingDate DateTime?
+  closedBy    String?   @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  periodConfigs       FYPeriodConfig[]
+  donations           DonationCollection[]
+  handovers           CashHandover[]
+  vouchers            PaymentVoucher[]
+  cashBook            CashBook[]
+  bankDeposits        BankDeposit[]
+  bankReconciliations BankReconciliation[]
+  glPostings          GLPosting[]
+  cheques             ChequeRegister[]
+
+  @@index([startDate])
+  @@index([isCurrent])
+}
+
+model FYPeriodConfig {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  financialYearId String        @db.ObjectId
+  financialYear   FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Cascade)
+
+  periodName   String // April, May, June, etc.
+  periodNumber Int // 1-12
+
+  startDate DateTime
+  endDate   DateTime
+
+  isClosed   Boolean   @default(false)
+  closedDate DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([financialYearId, periodNumber])
+  @@index([financialYearId])
+}
+
+// ============================================
+// MULTI-TEMPLE MODELS
+// ============================================
+
+model Temple {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  templeName String
+  templeCode String @unique
+
+  address String?
+  city    String?
+  state   String?
+  pinCode String?
+
+  phone String?
+  email String?
+
+  registrationNumber String?
+  gstNumber          String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  templeUsers TempleUser[]
+}
+
+model TempleUser {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  templeId String @db.ObjectId
+  temple   Temple @relation(fields: [templeId], references: [id], onDelete: Cascade)
+
+  userId String @db.ObjectId
+
+  canAccess    Boolean  @default(true)
+  assignedDate DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@unique([templeId, userId])
+  @@index([templeId])
+  @@index([userId])
+}
+
+// ============================================
+// DOCUMENT FILING MODELS
+// ============================================
+
+model Document {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  category    String // Donation, Voucher, Legal, Financial, Other
+  fileUrl     String
+  fileType    String
+  fileSize    Int
+  uploadedBy  String   @db.ObjectId
+  uploader    User     @relation(fields: [uploadedBy], references: [id])
+  referenceId String?  @db.ObjectId // Link to Donation, Voucher, etc.
+  description String?
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([uploadedBy])
+  @@index([createdAt])
+}
+
+// ============================================
+// MANDIR ASSET MODELS
+// ============================================
+
+model MandirAsset {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  assetCode String @unique
+  assetName String
+  category  String // Furniture, Electronics, Construction, Ritual Item, etc.
+
+  description   String?
+  purchaseDate  DateTime?
+  purchaseValue Float     @default(0)
+  location      String?
+  condition     String? // Good, Needs Repair, Damaged
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+// ============================================
+// JEWELLERY REGISTER MODELS
+// ============================================
+
+model JewelleryAsset {
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  jewelleryCode String @unique
+  jewelleryName String
+  metalType     String // Gold, Silver
+
+  description String?
+  purity      String? // 22K, 24K, 925, etc.
+  weight      Float   @default(0) // In Grams
+  quantity    Int     @default(1)
+
+  estimatedValue Float     @default(0)
+  receivedDate   DateTime?
+  donorName      String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([metalType])
+}
