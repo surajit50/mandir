@@ -67,6 +67,14 @@ const PAYMENT_CATEGORIES = [
   { value: "OTHER_EXPENSE", label: "Other Expense" },
 ];
 
+// Categories that must auto‑post – used to enforce bank account selection
+const INSTANT_POST_CATEGORIES = [
+  "DIRECT_DEPOSIT",
+  "BANK_INTEREST",
+  "BANK_TRANSFER_RECEIVED",
+  "ONLINE_RECEIVED",
+];
+
 export default function NewVoucherPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,6 +129,10 @@ export default function NewVoucherPage() {
     fetcher,
   );
 
+  // Derived boolean: does this receipt require a bank account (i.e., will it auto‑post)?
+  const requiresBankAccount =
+    voucherType === "RECEIPT" && INSTANT_POST_CATEGORIES.includes(category);
+
   // Update available balance based on payment method and bank account
   useEffect(() => {
     if (voucherType === "RECEIPT") {
@@ -168,10 +180,10 @@ export default function NewVoucherPage() {
       setReferenceDate("");
       setReceivedChequeBank("");
     }
-    if (paymentMethod === "CASH") {
+    if (paymentMethod === "CASH" && !requiresBankAccount) {
       setBankAccountId("");
     }
-  }, [voucherType, paymentMethod]);
+  }, [voucherType, paymentMethod, requiresBankAccount]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +216,12 @@ export default function NewVoucherPage() {
 
     if (!description) {
       toast.error("Description is required");
+      return;
+    }
+
+    // NEW: enforce bank account for auto‑post categories
+    if (requiresBankAccount && !bankAccountId) {
+      toast.error("Bank account is required for this receipt type");
       return;
     }
 
@@ -357,7 +375,7 @@ export default function NewVoucherPage() {
                   onChange={(e) => {
                     setPaymentMethod(e.target.value);
                     if (e.target.value !== "CHEQUE") setChequeId("");
-                    if (e.target.value === "CASH") setBankAccountId("");
+                    if (e.target.value === "CASH" && !requiresBankAccount) setBankAccountId("");
                   }}
                 >
                   <option value="CASH">Cash</option>
@@ -453,8 +471,8 @@ export default function NewVoucherPage() {
               </div>
             )}
 
-            {/* Bank Account — only for non-CASH payments */}
-            {paymentMethod !== "CASH" && (
+            {/* Bank Account — always show for auto‑post categories, otherwise only for non‑cash */}
+            {(paymentMethod !== "CASH" || requiresBankAccount) && (
               <div>
                 <label
                   htmlFor="bankAccount"
@@ -463,12 +481,14 @@ export default function NewVoucherPage() {
                   {paymentMethod === "CHEQUE"
                     ? "Bank Account (Cheque Book)"
                     : "Bank Account"}
+                  {requiresBankAccount && <span className="text-red-500"> *</span>}
                 </label>
                 <select
                   id="bankAccount"
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={bankAccountId}
                   onChange={(e) => setBankAccountId(e.target.value)}
+                  required={requiresBankAccount}
                 >
                   <option value="">Select bank account</option>
                   {bankAccounts?.map((account) => (
@@ -494,6 +514,11 @@ export default function NewVoucherPage() {
                       ? "used for this online payment"
                       : "to which the online payment was received"}
                     .
+                  </p>
+                )}
+                {requiresBankAccount && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    This receipt will be instantly credited to the passbook.
                   </p>
                 )}
               </div>
