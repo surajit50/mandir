@@ -4,8 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Loader2, Plus, Trash2, Coins, Gem, Banknote, Smartphone } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Loader2, Plus, Trash2, Coins, Gem, Banknote, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 
 interface DonationItem {
@@ -14,13 +20,16 @@ interface DonationItem {
   amount: number;
   donationType: "Cash" | "UPI" | "Gold" | "Silver";
   weight?: number;
+  purity?: string;            // new: purity e.g. "22K", "925"
   description: string;
 }
 
 export default function NewDonationPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [collectionDate, setCollectionDate] = useState(new Date().toISOString().split("T")[0]);
+  const [collectionDate, setCollectionDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   const [remarks, setRemarks] = useState("");
   const [items, setItems] = useState<DonationItem[]>([
     {
@@ -53,7 +62,7 @@ export default function NewDonationPage() {
 
   const handleItemChange = (id: string, field: string, value: any) => {
     setItems(
-      items.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+      items.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     );
   };
 
@@ -63,11 +72,21 @@ export default function NewDonationPage() {
       toast.error("Collection date is required");
       return;
     }
-    const validItems = items.filter((item) => item.donorName && item.amount > 0);
+
+    // Validation matching API: for Gold/Silver only weight is mandatory
+    const validItems = items.filter((item) => {
+      if (!item.donorName) return false;
+      if (item.donationType === "Gold" || item.donationType === "Silver") {
+        return (item.weight ?? 0) > 0;
+      }
+      return item.amount > 0;
+    });
+
     if (validItems.length === 0) {
-      toast.error("Add at least one donation item");
+      toast.error("Add at least one valid donation item");
       return;
     }
+
     setIsSubmitting(true);
     try {
       const response = await fetch("/api/donations", {
@@ -95,7 +114,9 @@ export default function NewDonationPage() {
   };
 
   const totalAmount = items.reduce((sum, item) => sum + (item.amount || 0), 0);
-  const itemCount = items.filter((i) => i.donorName && i.amount > 0).length;
+  const itemCount = items.filter(
+    (i) => i.donorName && (i.amount > 0 || (i.weight ?? 0) > 0),
+  ).length;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -196,22 +217,33 @@ export default function NewDonationPage() {
                         <Input
                           placeholder="e.g. Ramesh Kumar"
                           value={item.donorName}
-                          onChange={(e) => handleItemChange(item.id, "donorName", e.target.value)}
+                          onChange={(e) =>
+                            handleItemChange(item.id, "donorName", e.target.value)
+                          }
                           required
                         />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-medium text-slate-500">
-                          Amount (₹) <span className="text-red-500">*</span>
+                          Amount (₹)
+                          {isPrecious ? (
+                            <span className="text-slate-400 ml-1">(optional)</span>
+                          ) : (
+                            <span className="text-red-500"> *</span>
+                          )}
                         </label>
                         <Input
                           type="number"
                           placeholder="0"
                           value={item.amount || ""}
                           onChange={(e) =>
-                            handleItemChange(item.id, "amount", parseFloat(e.target.value) || 0)
+                            handleItemChange(
+                              item.id,
+                              "amount",
+                              parseFloat(e.target.value) || 0,
+                            )
                           }
-                          required
+                          required={!isPrecious}
                         />
                       </div>
                     </div>
@@ -245,35 +277,98 @@ export default function NewDonationPage() {
                       </div>
                     </div>
 
-                    {/* Row 3: Weight & Description */}
+                    {/* Row 3: Weight & Purity */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-xs font-medium text-slate-500 flex items-center gap-1">
                           Weight (grams)
                           {isPrecious && <span className="text-red-500">*</span>}
-                          {!isPrecious && <span className="text-slate-400">(auto for cash)</span>}
+                          {!isPrecious && (
+                            <span className="text-slate-400">(not applicable)</span>
+                          )}
                         </label>
                         <Input
                           type="number"
                           placeholder="grams"
                           value={item.weight || ""}
                           onChange={(e) =>
-                            handleItemChange(item.id, "weight", parseFloat(e.target.value) || 0)
+                            handleItemChange(
+                              item.id,
+                              "weight",
+                              parseFloat(e.target.value) || 0,
+                            )
                           }
                           disabled={!isPrecious}
-                          className={!isPrecious ? "bg-slate-50 text-slate-400 cursor-not-allowed" : ""}
+                          className={
+                            !isPrecious
+                              ? "bg-slate-50 text-slate-400 cursor-not-allowed"
+                              : ""
+                          }
                           required={isPrecious}
                         />
                       </div>
+
+                      {/* Purity – only for Gold/Silver */}
+                      {isPrecious ? (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-slate-500">
+                            Purity <span className="text-slate-400">(optional)</span>
+                          </label>
+                          <select
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                            value={item.purity || ""}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "purity", e.target.value)
+                            }
+                          >
+                            <option value="">Select purity</option>
+                            {item.donationType === "Gold" ? (
+                              <>
+                                <option value="22K">22K</option>
+                                <option value="24K">24K</option>
+                                <option value="18K">18K</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="925">925 (Sterling)</option>
+                                <option value="999">999 (Fine)</option>
+                                <option value="800">800</option>
+                              </>
+                            )}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-slate-500">
+                            Description
+                          </label>
+                          <Input
+                            placeholder="e.g. Special occasion"
+                            value={item.description}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "description", e.target.value)
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Row 4: Jewellery Name / Description (only for metals) */}
+                    {isPrecious && (
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-slate-500">Description</label>
+                        <label className="text-xs font-medium text-slate-500">
+                          Jewellery Name / Description{" "}
+                          <span className="text-slate-400">(optional)</span>
+                        </label>
                         <Input
-                          placeholder="e.g. Ring, necklace, special occasion"
+                          placeholder="e.g. Ring, chain, necklace"
                           value={item.description}
-                          onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
+                          onChange={(e) =>
+                            handleItemChange(item.id, "description", e.target.value)
+                          }
                         />
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               );
@@ -294,7 +389,7 @@ export default function NewDonationPage() {
         <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-lg transition-all duration-300 hover:shadow-xl">
           <CardContent className="flex items-center justify-between py-6">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-slate-500">Total Collection</p>
+              <p className="text-sm font-medium text-slate-500">Total Collection (Cash/UPI)</p>
               <p className="text-4xl font-bold text-blue-700">
                 ₹{totalAmount.toLocaleString()}
               </p>
