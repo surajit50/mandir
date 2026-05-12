@@ -80,7 +80,7 @@ model DonationCollection {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
+jewelleryAssets JewelleryAsset[]
   // Relations
   donationItems DonationItem[]
   cashBook      CashBook[]
