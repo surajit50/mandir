@@ -10,7 +10,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  ArrowLeft,
+  Gem,
+  Coins,
+} from "lucide-react";
 import Link from "next/link";
 
 interface DonationItem {
@@ -20,6 +27,19 @@ interface DonationItem {
   donationType: string;
   weight?: number;
   description?: string;
+}
+
+interface JewelleryAsset {
+  id: string;
+  jewelleryCode: string;
+  jewelleryName: string;
+  metalType: string;
+  purity?: string;
+  weight: number;
+  quantity: number;
+  estimatedValue: number;
+  receivedDate?: string;
+  donorName?: string;
 }
 
 interface DonationDetail {
@@ -38,6 +58,7 @@ interface DonationDetail {
   verifiedBy?: string;
   verifiedAt?: string;
   createdAt: string;
+  jewelleryAssets?: JewelleryAsset[]; // new field
 }
 
 export default function DonationDetailPage() {
@@ -58,6 +79,7 @@ export default function DonationDetailPage() {
           throw new Error("Failed to fetch donation");
         }
         const data = await response.json();
+        // data now includes jewelleryAssets array
         setDonation(data);
       } catch (err) {
         setError("Failed to load donation details");
@@ -122,6 +144,8 @@ export default function DonationDetailPage() {
       </div>
     );
   }
+
+  const jewelleryAssets = donation.jewelleryAssets || [];
 
   return (
     <div className="space-y-6">
@@ -188,7 +212,7 @@ export default function DonationDetailPage() {
             </div>
 
             <div className="border-t border-slate-200 pt-4">
-              <p className="text-sm text-slate-600">Total Amount</p>
+              <p className="text-sm text-slate-600">Total Amount (Cash/UPI)</p>
               <p className="text-3xl font-bold text-blue-600">
                 ₹{donation.totalAmount.toLocaleString()}
               </p>
@@ -282,7 +306,7 @@ export default function DonationDetailPage() {
 
           <div className="mt-4 pt-4 border-t border-slate-200 flex justify-end">
             <div>
-              <p className="text-sm text-slate-600 mb-1">Total</p>
+              <p className="text-sm text-slate-600 mb-1">Total Cash/UPI</p>
               <p className="text-2xl font-bold text-slate-900">
                 ₹{donation.totalAmount.toLocaleString()}
               </p>
@@ -290,6 +314,81 @@ export default function DonationDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Jewellery Assets (if any) */}
+      {jewelleryAssets.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gem className="w-5 h-5 text-amber-600" />
+              Linked Jewellery Assets
+            </CardTitle>
+            <CardDescription>
+              Automatically created for gold/silver donations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-amber-200">
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">
+                      Code
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">
+                      Name
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">
+                      Metal
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">
+                      Purity
+                    </th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-700">
+                      Weight
+                    </th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-700">
+                      Est. Value
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jewelleryAssets.map((asset) => (
+                    <tr
+                      key={asset.id}
+                      className="border-b border-amber-100 hover:bg-amber-50"
+                    >
+                      <td className="py-3 px-4 font-medium text-slate-900">
+                        {asset.jewelleryCode}
+                      </td>
+                      <td className="py-3 px-4">{asset.jewelleryName}</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded bg-amber-100 text-amber-800">
+                          {asset.metalType === "Gold" ? (
+                            <Coins className="w-3 h-3" />
+                          ) : (
+                            <Gem className="w-3 h-3" />
+                          )}
+                          {asset.metalType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        {asset.purity || "-"}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold">
+                        {asset.weight}g
+                      </td>
+                      <td className="py-3 px-4 text-right text-emerald-600 font-semibold">
+                        ₹{asset.estimatedValue.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
