@@ -891,19 +891,23 @@ model MandirAsset {
 // ============================================
 
 model JewelleryAsset {
-  id            String @id @default(auto()) @map("_id") @db.ObjectId
-  jewelleryCode String @unique
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  jewelleryCode String   @unique
   jewelleryName String
-  metalType     String // Gold, Silver
+  metalType     String   // Gold, Silver
 
   description String?
-  purity      String? // 22K, 24K, 925, etc.
-  weight      Float   @default(0) // In Grams
-  quantity    Int     @default(1)
+  purity      String?    // 22K, 24K, 925, etc.
+  weight      Float      @default(0)
+  quantity    Int        @default(1)
 
   estimatedValue Float     @default(0)
   receivedDate   DateTime?
   donorName      String?
+
+  // ----- NEW RELATION FIELDS -----
+  donationCollectionId String?             @db.ObjectId
+  donationCollection   DonationCollection? @relation(fields: [donationCollectionId], references: [id])
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
