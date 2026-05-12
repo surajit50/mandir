@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+     import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -77,29 +77,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Create JewelleryAssets for Gold/Silver
-      const metalItems = validatedData.donationItems.filter(
-        (i) => i.donationType === "Gold" || i.donationType === "Silver"
-      );
-
-      for (const item of metalItems) {
-        const uniqueCode = `${item.donationType.charAt(0)}${Date.now().toString(36)}${Math.random().toString(36).substring(2, 6)}`.toUpperCase();
-
-        await tx.jewelleryAsset.create({
-          data: {
-            jewelleryCode: uniqueCode,
-            jewelleryName: item.description || `${item.donorName}'s ${item.donationType}`,
-            metalType: item.donationType,
-            purity: item.purity || null,
-            weight: item.weight || 0,
-            quantity: 1,
-            estimatedValue: item.amount || 0,
-            receivedDate: new Date(validatedData.collectionDate),
-            donorName: item.donorName,
-          },
-        });
-      }
-
+      // JewelleryAssets will be created later when verified
       return donationCollection;
     });
 
@@ -131,6 +109,10 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+
+    
+
 
 export async function GET(request: NextRequest) {
   try {
