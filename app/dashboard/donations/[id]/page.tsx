@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   Card,
@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Gem,
   Coins,
+  Banknote,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -58,7 +59,7 @@ interface DonationDetail {
   verifiedBy?: string;
   verifiedAt?: string;
   createdAt: string;
-  jewelleryAssets?: JewelleryAsset[]; // new field
+  jewelleryAssets?: JewelleryAsset[];
 }
 
 export default function DonationDetailPage() {
@@ -75,11 +76,8 @@ export default function DonationDetailPage() {
     const fetchDonation = async () => {
       try {
         const response = await fetch(`/api/donations/${donationId}`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch donation");
-        }
+        if (!response.ok) throw new Error("Failed to fetch donation");
         const data = await response.json();
-        // data now includes jewelleryAssets array
         setDonation(data);
       } catch (err) {
         setError("Failed to load donation details");
@@ -88,7 +86,6 @@ export default function DonationDetailPage() {
         setIsLoading(false);
       }
     };
-
     fetchDonation();
   }, [donationId]);
 
@@ -102,11 +99,7 @@ export default function DonationDetailPage() {
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to verify donation");
-      }
-
+      if (!response.ok) throw new Error(data.error || "Failed to verify donation");
       setDonation(data);
     } catch (err: any) {
       setError(err.message || "Failed to verify donation");
@@ -115,6 +108,19 @@ export default function DonationDetailPage() {
       setIsVerifying(false);
     }
   };
+
+  // ---- Computed values for better display ----
+  const cashItems = useMemo(
+    () => donation?.donationItems.filter((i) => i.donationType === "Cash" || i.donationType === "UPI") ?? [],
+    [donation]
+  );
+  const metalItems = useMemo(
+    () => donation?.donationItems.filter((i) => i.donationType === "Gold" || i.donationType === "Silver") ?? [],
+    [donation]
+  );
+  const cashTotal = useMemo(() => cashItems.reduce((sum, i) => sum + i.amount, 0), [cashItems]);
+
+  const jewelleryAssets = donation?.jewelleryAssets || [];
 
   if (isLoading) {
     return (
@@ -129,8 +135,7 @@ export default function DonationDetailPage() {
       <div className="space-y-4">
         <Link href="/dashboard/donations">
           <Button variant="outline">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Donations
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Donations
           </Button>
         </Link>
         <Card className="border-red-200 bg-red-50">
@@ -145,28 +150,19 @@ export default function DonationDetailPage() {
     );
   }
 
-  const jewelleryAssets = donation.jewelleryAssets || [];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/donations">
             <Button variant="outline">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back
             </Button>
           </Link>
-          <h1 className="text-3xl font-bold text-slate-900">
-            Donation Collection Details
-          </h1>
+          <h1 className="text-3xl font-bold text-slate-900">Donation Collection Details</h1>
         </div>
         {!donation.isVerified && (
-          <Button
-            onClick={handleVerify}
-            disabled={isVerifying}
-            className="bg-green-600 hover:bg-green-700"
-          >
+          <Button onClick={handleVerify} disabled={isVerifying} className="bg-green-600 hover:bg-green-700">
             {isVerifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isVerifying ? "Verifying..." : "Verify Collection"}
           </Button>
@@ -180,8 +176,7 @@ export default function DonationDetailPage() {
           <div>
             <p className="font-medium text-green-800">Verified Collection</p>
             <p className="text-sm text-green-700">
-              Verified on{" "}
-              {new Date(donation.verifiedAt || "").toLocaleDateString()}
+              Verified on {donation.verifiedAt ? new Date(donation.verifiedAt).toLocaleDateString() : ""}
             </p>
           </div>
         </div>
@@ -196,28 +191,26 @@ export default function DonationDetailPage() {
           <CardContent className="space-y-4">
             <div>
               <p className="text-sm text-slate-600">Collector</p>
-              <p className="font-medium text-slate-900">
-                {donation.collector.name}
-              </p>
-              <p className="text-sm text-slate-500">
-                {donation.collector.email}
-              </p>
+              <p className="font-medium text-slate-900">{donation.collector.name}</p>
+              <p className="text-sm text-slate-500">{donation.collector.email}</p>
             </div>
-
             <div className="border-t border-slate-200 pt-4">
               <p className="text-sm text-slate-600">Collection Date</p>
               <p className="font-medium text-slate-900">
                 {new Date(donation.collectionDate).toLocaleDateString()}
               </p>
             </div>
-
             <div className="border-t border-slate-200 pt-4">
-              <p className="text-sm text-slate-600">Total Amount (Cash/UPI)</p>
+              <p className="text-sm text-slate-600">Cash / UPI Total</p>
               <p className="text-3xl font-bold text-blue-600">
-                ₹{donation.totalAmount.toLocaleString()}
+                ₹{cashTotal.toLocaleString()}
               </p>
+              {metalItems.length > 0 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  (+ {metalItems.reduce((sum, i) => sum + (i.weight || 0), 0)}g of precious metals)
+                </p>
+              )}
             </div>
-
             <div className="border-t border-slate-200 pt-4">
               <p className="text-sm text-slate-600">Status</p>
               <span
@@ -245,139 +238,141 @@ export default function DonationDetailPage() {
         )}
       </div>
 
-      {/* Donation Items */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Donation Items</CardTitle>
-          <CardDescription>
-            {donation.donationItems.length} item(s) recorded
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">
-                    Donor Name
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">
-                    Type
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">
-                    Weight (g)
-                  </th>
-                  <th className="text-right py-3 px-4 font-medium text-slate-700">
-                    Amount
-                  </th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-700">
-                    Description
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {donation.donationItems.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-b border-slate-100 hover:bg-slate-50"
-                  >
-                    <td className="py-3 px-4 font-medium text-slate-900">
-                      {item.donorName}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs font-medium px-2 py-1 rounded bg-slate-100 text-slate-700">
-                        {item.donationType}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {item.weight ? `${item.weight}g` : "-"}
-                    </td>
-                    <td className="py-3 px-4 text-right font-semibold text-slate-900">
-                      ₹{item.amount.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {item.description || "-"}
-                    </td>
+      {/* Donation Items – split into Cash & Metals for clarity */}
+      {cashItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-emerald-600" /> Cash / UPI Donations
+            </CardTitle>
+            <CardDescription>{cashItems.length} cash/UPI item(s) recorded</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Donor Name</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Type</th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-700">Amount</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Description</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-slate-200 flex justify-end">
-            <div>
-              <p className="text-sm text-slate-600 mb-1">Total Cash/UPI</p>
-              <p className="text-2xl font-bold text-slate-900">
-                ₹{donation.totalAmount.toLocaleString()}
-              </p>
+                </thead>
+                <tbody>
+                  {cashItems.map((item) => (
+                    <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-4 font-medium text-slate-900">{item.donorName}</td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs font-medium px-2 py-1 rounded bg-slate-100 text-slate-700">
+                          {item.donationType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-slate-900">
+                        ₹{item.amount.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">{item.description || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex justify-end">
+              <div>
+                <p className="text-sm text-slate-600 mb-1">Cash / UPI Total</p>
+                <p className="text-2xl font-bold text-slate-900">₹{cashTotal.toLocaleString()}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Jewellery Assets (if any) */}
+      {metalItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Gem className="w-5 h-5 text-amber-600" /> Precious Metals (Gold / Silver)
+            </CardTitle>
+            <CardDescription>{metalItems.length} metal item(s) donated</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Donor Name</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Metal</th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-700">Weight (g)</th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-700">Est. Value</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metalItems.map((item) => (
+                    <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-4 font-medium text-slate-900">{item.donorName}</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded bg-amber-100 text-amber-800">
+                          {item.donationType === "Gold" ? <Coins className="w-3 h-3" /> : <Gem className="w-3 h-3" />}
+                          {item.donationType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold">{item.weight ?? "-"}g</td>
+                      <td className="py-3 px-4 text-right text-emerald-600 font-semibold">
+                        ₹{(item.amount || 0).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">{item.description || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex justify-end">
+              <div>
+                <p className="text-sm text-slate-600 mb-1">Total Weight</p>
+                <p className="text-2xl font-bold text-slate-900">
+                  {metalItems.reduce((sum, i) => sum + (i.weight || 0), 0)}g
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Jewellery Assets (only after verification) */}
       {jewelleryAssets.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Gem className="w-5 h-5 text-amber-600" />
-              Linked Jewellery Assets
+              <Gem className="w-5 h-5 text-amber-600" /> Linked Jewellery Assets
             </CardTitle>
-            <CardDescription>
-              Automatically created for gold/silver donations
-            </CardDescription>
+            <CardDescription>Inventory records automatically created after verification</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-amber-200">
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">
-                      Code
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">
-                      Name
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">
-                      Metal
-                    </th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-700">
-                      Purity
-                    </th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-700">
-                      Weight
-                    </th>
-                    <th className="text-right py-3 px-4 font-medium text-slate-700">
-                      Est. Value
-                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Code</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Name</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Metal</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-700">Purity</th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-700">Weight</th>
+                    <th className="text-right py-3 px-4 font-medium text-slate-700">Est. Value</th>
                   </tr>
                 </thead>
                 <tbody>
                   {jewelleryAssets.map((asset) => (
-                    <tr
-                      key={asset.id}
-                      className="border-b border-amber-100 hover:bg-amber-50"
-                    >
-                      <td className="py-3 px-4 font-medium text-slate-900">
-                        {asset.jewelleryCode}
-                      </td>
+                    <tr key={asset.id} className="border-b border-amber-100 hover:bg-amber-50">
+                      <td className="py-3 px-4 font-medium text-slate-900">{asset.jewelleryCode}</td>
                       <td className="py-3 px-4">{asset.jewelleryName}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded bg-amber-100 text-amber-800">
-                          {asset.metalType === "Gold" ? (
-                            <Coins className="w-3 h-3" />
-                          ) : (
-                            <Gem className="w-3 h-3" />
-                          )}
+                          {asset.metalType === "Gold" ? <Coins className="w-3 h-3" /> : <Gem className="w-3 h-3" />}
                           {asset.metalType}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
-                        {asset.purity || "-"}
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold">
-                        {asset.weight}g
-                      </td>
+                      <td className="py-3 px-4">{asset.purity || "-"}</td>
+                      <td className="py-3 px-4 text-right font-semibold">{asset.weight}g</td>
                       <td className="py-3 px-4 text-right text-emerald-600 font-semibold">
                         ₹{asset.estimatedValue.toLocaleString()}
                       </td>
