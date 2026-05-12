@@ -1,4 +1,3 @@
-// app/api/donations/[id]/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -6,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -14,13 +13,13 @@ export async function GET(
   }
 
   try {
+    const { id } = await params;
     const donation = await prisma.donationCollection.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         donationItems: true,
         collector: { select: { id: true, name: true, email: true } },
-        // Add this to include jewellery assets
-        jewelleryAssets: true,   // Prisma relation name must match your schema
+        jewelleryAssets: true,   // include linked jewellery assets
       },
     });
 
