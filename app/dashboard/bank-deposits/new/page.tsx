@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { AlertCircle, Loader2, Plus, X, Wallet, Building2 } from "lucide-react";
 import useSWR from "swr";
+import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -30,10 +31,15 @@ interface Cheque {
   status: string;
 }
 
+interface CashBalanceResponse {
+  balance: number;
+  totalReceipts: number;
+  totalPayments: number;
+}
+
 export default function NewBankDepositPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
   const [depositDate, setDepositDate] = useState(
     new Date().toISOString().split("T")[0],
@@ -50,14 +56,16 @@ export default function NewBankDepositPage() {
     { revalidateOnFocus: false },
   );
 
+  // ✅ FIXED: Use correct cash book balance endpoint
+  const { data: cashBalanceData, isLoading: isLoadingCash } = useSWR<CashBalanceResponse>(
+    "/api/cash-book/balance",
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
   const { data: cheques } = useSWR<Cheque[]>("/api/cheques", fetcher, {
     revalidateOnFocus: false,
   });
-
-  const { data: cashBalanceData, isLoading: isLoadingCash } = useSWR(
-    "/api/members/me/balance",
-    fetcher,
-  );
 
   const availableCash = cashBalanceData?.balance || 0;
   const selectedAccount = accounts?.find((a) => a.id === accountId);
@@ -101,25 +109,24 @@ export default function NewBankDepositPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
     if (!depositDate) {
-      setError("Deposit date is required");
+      toast.error("Deposit date is required");
       return;
     }
 
     if (!accountId) {
-      setError("Account is required");
+      toast.error("Account is required");
       return;
     }
 
     if (!totalAmount || parseFloat(totalAmount) <= 0) {
-      setError("Total amount must be greater than 0");
+      toast.error("Total amount must be greater than 0");
       return;
     }
 
     if (depositType !== "CHEQUE" && cashPortion > availableCash) {
-      setError(
+      toast.error(
         `Cash deposit amount (₹${cashPortion.toLocaleString()}) cannot exceed available cash balance (₹${availableCash.toLocaleString()})`,
       );
       return;
@@ -144,13 +151,14 @@ export default function NewBankDepositPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Failed to create deposit");
+        toast.error(data.error || "Failed to create deposit");
         return;
       }
 
+      toast.success("Deposit created successfully");
       router.push(`/dashboard/bank-deposits/${data.id}`);
     } catch (err) {
-      setError("An error occurred");
+      toast.error("An error occurred");
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -183,7 +191,7 @@ export default function NewBankDepositPage() {
               </p>
             )}
             <p className="text-xs text-slate-500 mt-1">
-              Accountant cash in hand
+              Available in cash book (after all deposits & payments)
             </p>
           </CardContent>
         </Card>
@@ -211,13 +219,6 @@ export default function NewBankDepositPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="flex gap-2 items-start bg-red-50 border border-red-200 rounded-lg p-3">
-            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
         {/* Basic Info */}
         <Card>
           <CardHeader>
@@ -301,14 +302,19 @@ export default function NewBankDepositPage() {
                   onChange={(e) => setTotalAmount(e.target.value)}
                   step="0.01"
                   required
+                  min="0"
                 />
                 {(depositType === "MIXED" || depositType === "CASH") && (
                   <p
-                    className={`text-xs mt-1 ${cashPortion > availableCash ? "text-red-600 font-medium" : "text-slate-500"}`}
+                    className={`text-xs mt-1 ${
+                      cashPortion > availableCash
+                        ? "text-red-600 font-medium"
+                        : "text-slate-500"
+                    }`}
                   >
                     Cash portion: ₹{cashPortion.toLocaleString()}
                     {cashPortion > availableCash &&
-                      " (Exceeds available cash!)"}
+                      " (⚠️ Exceeds available cash!)"}
                   </p>
                 )}
               </div>
@@ -329,7 +335,7 @@ export default function NewBankDepositPage() {
               {selectedCheques.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-slate-700">
-                    Selected Cheques:
+                    Selected Cheques ({selectedCheques.length}):
                   </p>
                   <div className="space-y-2">
                     {selectedCheques.map((chequeId) => {
@@ -358,13 +364,16 @@ export default function NewBankDepositPage() {
                       ) : null;
                     })}
                   </div>
+                  <div className="text-sm text-slate-700 pt-2 border-t">
+                    Cheques total: ₹{chequesTotal.toLocaleString()}
+                  </div>
                 </div>
               )}
 
               {availableCheques.length > 0 && (
                 <div>
                   <label className="text-sm font-medium text-slate-700 block mb-2">
-                    Available Cheques
+                    Available Cheques to Add
                   </label>
                   <select
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -374,16 +383,23 @@ export default function NewBankDepositPage() {
                         e.target.value = "";
                       }
                     }}
+                    defaultValue=""
                   >
-                    <option value="">Add a cheque...</option>
+                    <option value="">+ Add a cheque...</option>
                     {availableCheques.map((cheque) => (
                       <option key={cheque.id} value={cheque.id}>
-                        {cheque.chequeNumber} - ₹
+                        #{cheque.chequeNumber} - ₹
                         {cheque.amount.toLocaleString()}
                       </option>
                     ))}
                   </select>
                 </div>
+              )}
+
+              {availableCheques.length === 0 && selectedCheques.length === 0 && (
+                <p className="text-sm text-slate-500 py-3">
+                  No available cheques. All issued cheques have been deposited.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -392,7 +408,7 @@ export default function NewBankDepositPage() {
         {/* Remarks */}
         <Card>
           <CardHeader>
-            <CardTitle>Remarks</CardTitle>
+            <CardTitle>Remarks (Optional)</CardTitle>
           </CardHeader>
           <CardContent>
             <textarea
@@ -400,10 +416,32 @@ export default function NewBankDepositPage() {
               rows={3}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Add any notes..."
+              placeholder="Add any notes about this deposit..."
             />
           </CardContent>
         </Card>
+
+        {/* Summary */}
+        {totalAmount && (
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-6 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700">Cheques:</span>
+                <span className="font-medium">₹{chequesTotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700">Cash:</span>
+                <span className="font-medium">₹{cashPortion.toLocaleString()}</span>
+              </div>
+              <div className="border-t pt-2 flex justify-between">
+                <span className="font-semibold">Total Deposit:</span>
+                <span className="text-lg font-bold text-blue-600">
+                  ₹{parseFloat(totalAmount || "0").toLocaleString()}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Actions */}
         <div className="flex gap-3 justify-end">
