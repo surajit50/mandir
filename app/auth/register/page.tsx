@@ -77,10 +77,10 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <Card className="shadow-lg border-t-2 border-t-emerald-500">
+      <Card className="shadow-lg border-t-2 border-t-primary">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-2">
-            <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white">
+            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white">
               <Landmark className="w-6 h-6" />
             </div>
           </div>
@@ -88,7 +88,7 @@ export default function RegisterPage() {
           <CardDescription>Account created successfully</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4">
-          <CheckCircle className="w-16 h-16 text-emerald-600" />
+          <CheckCircle className="w-16 h-16 text-primary" />
           <p className="text-center text-sm text-muted-foreground">
             Your account has been created. Redirecting to login...
           </p>
@@ -98,10 +98,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <Card className="shadow-lg border-t-2 border-t-emerald-500">
+    <Card className="shadow-lg border-t-2 border-t-primary">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-2">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white">
+          <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white">
             <Landmark className="w-6 h-6" />
           </div>
         </div>
@@ -182,7 +182,7 @@ export default function RegisterPage() {
 
           <Button
             type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="w-full bg-primary hover:bg-primary/90 text-white"
             disabled={isLoading}
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -192,7 +192,7 @@ export default function RegisterPage() {
 
         <div className="mt-6 text-center text-sm">
           <span className="text-muted-foreground">Already have an account? </span>
-          <Link href="/auth/login" className="text-emerald-600 hover:text-emerald-700 hover:underline font-medium">
+          <Link href="/auth/login" className="text-primary hover:text-primary/90 hover:underline font-medium">
             Sign in here
           </Link>
         </div>

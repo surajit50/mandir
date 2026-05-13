@@ -51,10 +51,10 @@ function LoginForm() {
   };
 
   return (
-    <Card className="shadow-lg border-t-2 border-t-emerald-500">
+    <Card className="shadow-lg border-t-2 border-t-primary">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-2">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white">
+          <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white">
             <Landmark className="w-6 h-6" />
           </div>
         </div>
@@ -100,7 +100,7 @@ function LoginForm() {
             />
           </div>
 
-          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" disabled={isLoading}>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isLoading ? "Signing in..." : "Sign In"}
           </Button>
@@ -110,7 +110,7 @@ function LoginForm() {
           <span className="text-muted-foreground">Don&apos;t have an account? </span>
           <Link
             href="/auth/register"
-            className="text-emerald-600 hover:text-emerald-700 hover:underline font-medium"
+            className="text-primary hover:text-primary/90 hover:underline font-medium"
           >
             Register here
           </Link>

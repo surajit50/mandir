@@ -107,7 +107,7 @@ export default function Sidebar({ role, className, onItemClick }: SidebarProps) 
       {/* Logout */}
       <div className="p-3 border-t border-sidebar-border">
         <Button
-          onClick={() => signOut({ callbackUrl: "/auth/login" })}
+          onClick={() => signOut({ callbackUrl: "/" })}
           variant="ghost"
           className="w-full justify-start text-sidebar-foreground/60 hover:text-red-400 hover:bg-red-500/10 gap-3 px-3"
         >
