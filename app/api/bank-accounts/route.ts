@@ -90,7 +90,6 @@ export async function GET(request: NextRequest) {
     console.log("Fetching bank accounts...");
 
     const bankAccounts = await prisma.bankAccount.findMany({
-      where: { isActive: true },
       orderBy: { createdAt: "desc" },
     });
 
