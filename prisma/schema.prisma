@@ -299,26 +299,26 @@ model CashBook {
 // ============================================
 // BANK ACCOUNT & DEPOSIT MODELS
 // ============================================
-
 model BankAccount {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  accountNumber  String
+  accountNumber  String   @unique     // ← ADD THIS UNIQUE
   bankName       String
   branch         String?
   ifscCode       String?
   accountHolder  String
-  accountType    String   @default("SAVINGS") // SAVINGS, CURRENT
+  accountType    String   @default("SAVINGS")
+  openingBalance Float    @default(0)  // ← ADD THIS
   currentBalance Float    @default(0)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  // Relations
-  bankTransactions  BankTransaction[]        // all credit / debit entries
-  chequeRegisters   ChequeRegister[]         // cheques belonging to this account
-  vouchers          PaymentVoucher[]         @relation("VoucherBankAccount") // vouchers using this bank account
-  deposits          BankDeposit[]            // deposits made to this account
-  reconciliations   BankReconciliation[]    // reconciliations for this account
+  // relations (keep exactly as before)
+  bankTransactions BankTransaction[]
+  chequeRegisters  ChequeRegister[]
+  vouchers         PaymentVoucher[]         @relation("VoucherBankAccount")
+  deposits         BankDeposit[]
+  reconciliations  BankReconciliation[]
 }
 
 model BankDeposit {
