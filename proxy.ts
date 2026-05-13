@@ -6,8 +6,12 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    // Redirect unauthenticated users to login, but allow access to / (home) and /auth
-    if (!token && !pathname.startsWith("/auth") && pathname !== "/") {
+    // Routes that should be public (unprotected)
+    const publicRoutes = ["/", "/about", "/contact", "/donations", "/events"];
+    const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
+    // Redirect unauthenticated users to login, but allow access to public routes and /auth
+    if (!token && !pathname.startsWith("/auth") && !isPublicRoute) {
       return NextResponse.redirect(new URL("/auth/login", req.url));
     }
 
@@ -40,8 +44,11 @@ export default withAuth(
     callbacks: {
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl;
-        // Allow public access to home and auth pages
-        if (pathname === "/" || pathname.startsWith("/auth")) {
+        const publicRoutes = ["/", "/about", "/contact", "/donations", "/events"];
+        const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+
+        // Allow public access to home, about, contact, donations, events, and auth pages
+        if (isPublicRoute || pathname.startsWith("/auth")) {
           return true;
         }
         return !!token;
