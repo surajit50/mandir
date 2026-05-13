@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { PaymentVoucherForm } from "@/components/forms/voucher-form/payment-voucher-form";
-
+  
 export default async function NewVoucherPage() {
   const session = await getServerSession(authOptions);
   
