@@ -13,9 +13,9 @@ import {
 
 import { Button } from "@/components/ui/button";
 
-import { FormInput } from "@/components/form/form-input";
+import { FormInput } from "./form-input";
 
-import { FormSelect } from "@/components/form/form-select";
+import { FormSelect } from "./form-select";
 
 import { toast } from "sonner";
 
