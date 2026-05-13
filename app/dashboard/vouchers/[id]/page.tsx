@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -19,9 +19,17 @@ import {
   Pencil,
   Trash2,
   Clock,
+  ChevronDown,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface VoucherDetail {
   id: string;
@@ -43,7 +51,6 @@ interface VoucherDetail {
 }
 
 export default function VoucherDetailPage() {
-  const router = useRouter();
   const params = useParams();
   const voucherId = params.id as string;
 
@@ -74,23 +81,33 @@ export default function VoucherDetailPage() {
     fetchVoucher();
   }, [voucherId]);
 
-  const handlePrint = async () => {
+  const openVoucherPdf = () => {
     try {
-      const printWindow = window.open(
+      window.open(
         `/api/vouchers/${voucherId}/print`,
-        "VoucherPrint",
-        "width=900,height=700",
+        "_blank",
+        "noopener,noreferrer",
       );
+    } catch (err) {
+      setError("Failed to open voucher PDF");
+      console.error(err);
+    }
+  };
 
-      if (printWindow) {
-        printWindow.addEventListener("load", () => {
-          setTimeout(() => {
-            printWindow.print();
-          }, 250);
+  const openVoucherHtmlPrint = () => {
+    try {
+      const w = window.open(
+        `/api/vouchers/${voucherId}/print?format=html`,
+        "_blank",
+        "noopener,noreferrer,width=900,height=700",
+      );
+      if (w) {
+        w.addEventListener("load", () => {
+          setTimeout(() => w.print(), 300);
         });
       }
     } catch (err) {
-      setError("Failed to print voucher");
+      setError("Failed to open printable HTML");
       console.error(err);
     }
   };
@@ -172,14 +189,25 @@ export default function VoucherDetailPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button
-            onClick={handlePrint}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <Printer className="w-4 h-4" />
-            Print
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Printer className="w-4 h-4" />
+                Print
+                <ChevronDown className="w-4 h-4 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={openVoucherPdf}>
+                <Printer className="w-4 h-4 mr-2" />
+                PDF (pdfme)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={openVoucherHtmlPrint}>
+                <FileText className="w-4 h-4 mr-2" />
+                Printable HTML
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Admin Actions: Approve/Reject */}
           {userRole === "ADMIN" && (voucher.status === "SUBMITTED" || voucher.status === "DRAFT") && (
