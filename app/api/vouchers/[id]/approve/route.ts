@@ -298,7 +298,7 @@ export async function POST(
         where: { id },
         include: { payee: { select: { id: true, name: true, email: true } }, bankAccount: true },
       });
-    });
+    }, { timeout: 15000 }); // ⬅️ FIX: increased timeout from default 5000ms to 15000ms
 
     return NextResponse.json(updatedVoucher);
   } catch (error) {
