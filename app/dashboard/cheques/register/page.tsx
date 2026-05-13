@@ -16,7 +16,6 @@ interface Cheque {
   chequeNumber: string;
   chequeDate: string;
   amount: number;
-  payeeName: string;
   status: string;
   clearedDate?: string;
   bounceDate?: string;
@@ -26,6 +25,11 @@ interface Cheque {
     bankName: string;
     accountNumber: string;
   };
+  paymentVouchers: Array<{
+    payee: {
+      name: string;
+    };
+  }>;
   createdAt: string;
 }
 
@@ -108,6 +112,22 @@ export default function ChequeRegisterPage() {
     }
   };
 
+  const getPayeeName = (cheque: Cheque): string => {
+    // Get payee from linked payment voucher
+    if (cheque.paymentVouchers && cheque.paymentVouchers.length > 0) {
+      return cheque.paymentVouchers[0].payee.name;
+    }
+    // If it's a blank leaf with 0 amount, show as unassigned
+    if (cheque.amount === 0) {
+      return "Unassigned Leaf";
+    }
+    return "—";
+  };
+
+  const isBlankLeaf = (cheque: Cheque): boolean => {
+    return cheque.amount === 0 && (!cheque.paymentVouchers || cheque.paymentVouchers.length === 0);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -181,7 +201,7 @@ export default function ChequeRegisterPage() {
           <div className="flex items-center gap-3">
             <TrendingUp className="w-8 h-8 text-green-600" />
             <div>
-              <p className="text-sm text-slate-600">Total Cleared Amount (Used Cheques)</p>
+              <p className="text-sm text-slate-600">Total Cleared Amount</p>
               <p className="text-3xl font-bold text-green-700">₹{totalClearedAmount.toLocaleString()}</p>
             </div>
           </div>
@@ -235,10 +255,10 @@ export default function ChequeRegisterPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {sortedCheques.map((cheque) => {
-                    const isUnassignedLeaf =
-                      cheque.payeeName === "UNASSIGNED" && cheque.amount === 0;
+                    const isBlank = isBlankLeaf(cheque);
                     const config = statusConfig[cheque.status] || statusConfig.ISSUED;
                     const StatusIcon = config.icon;
+                    const payeeName = getPayeeName(cheque);
 
                     return (
                       <tr key={cheque.id} className="hover:bg-slate-50 transition">
@@ -249,10 +269,10 @@ export default function ChequeRegisterPage() {
                           {new Date(cheque.chequeDate).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3 text-slate-700">
-                          {isUnassignedLeaf ? (
-                            <span className="text-slate-500 italic">Unassigned Leaf</span>
+                          {isBlank ? (
+                            <span className="text-slate-500 italic">{payeeName}</span>
                           ) : (
-                            cheque.payeeName
+                            payeeName
                           )}
                         </td>
                         <td className="px-4 py-3 text-slate-700">
@@ -262,7 +282,7 @@ export default function ChequeRegisterPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-900">
-                          {isUnassignedLeaf ? "—" : `₹${cheque.amount.toLocaleString()}`}
+                          {isBlank ? "—" : `₹${cheque.amount.toLocaleString()}`}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${config.bgColor}`}>
@@ -274,7 +294,7 @@ export default function ChequeRegisterPage() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex gap-2 justify-center">
-                            {cheque.status === "ISSUED" && !isUnassignedLeaf && (
+                            {cheque.status === "ISSUED" && !isBlank && (
                               <>
                                 <Button
                                   size="sm"
@@ -303,7 +323,7 @@ export default function ChequeRegisterPage() {
                                 </Button>
                               </>
                             )}
-                            {cheque.status === "ISSUED" && isUnassignedLeaf && (
+                            {cheque.status === "ISSUED" && isBlank && (
                               <Button
                                 size="sm"
                                 variant="outline"
