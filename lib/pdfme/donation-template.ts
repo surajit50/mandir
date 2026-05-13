@@ -1,66 +1,124 @@
 import { BLANK_A4_PDF, type Template } from "@pdfme/common";
+import { PDF_SAFFRON } from "./pdf-theme";
 import { textField } from "./text-field";
 
 /** pdfme template for donation collection summary (cash / UPI, metals, jewellery). */
+const sectionTitle = (
+  name: string,
+  y: number,
+  accent: { bg: string; fg: string; border: string },
+) =>
+  textField(name, 15, y, 180, 7.5, {
+    fontSize: 10,
+    fontColor: accent.fg,
+    verticalAlignment: "middle",
+    backgroundColor: accent.bg,
+    padding: { top: 1, right: 5, bottom: 1, left: 6 },
+    borderWidth: { top: 0, right: 0, bottom: 0, left: 2.25 },
+    borderColor: accent.border,
+    characterSpacing: 0.12,
+  });
+
 export const donationPdfTemplate: Template = {
   basePdf: BLANK_A4_PDF,
   pdfmeVersion: "6.1.2",
   schemas: [
     [
-      textField("docTitle", 15, 12, 180, 12, {
-        fontSize: 16,
+      textField("docTitle", 15, 10, 180, 15, {
+        fontSize: 17,
         alignment: "center",
-        fontColor: "#0f172a",
+        verticalAlignment: "middle",
+        fontColor: PDF_SAFFRON.ink,
+        backgroundColor: PDF_SAFFRON.cream,
+        characterSpacing: 0.4,
+        padding: { top: 2, right: 6, bottom: 2, left: 6 },
+        borderWidth: { top: 0, right: 0, bottom: 0.75, left: 0 },
+        borderColor: PDF_SAFFRON.border,
       }),
-      textField("metaLine", 15, 28, 180, 8, { fontSize: 10 }),
-      textField("collectorBlock", 15, 40, 180, 18, {
+      textField("metaLine", 15, 28, 180, 8, {
         fontSize: 10,
+        fontColor: PDF_SAFFRON.inkSoft,
         lineHeight: 1.2,
       }),
-      textField("totalsLine", 15, 62, 180, 10, { fontSize: 11 }),
-      textField("remarksBlock", 15, 76, 180, 22, {
+      textField("collectorBlock", 15, 39, 180, 19, {
+        fontSize: 10,
+        lineHeight: 1.25,
+        fontColor: PDF_SAFFRON.ink,
+        backgroundColor: PDF_SAFFRON.cream,
+        padding: { top: 3, right: 5, bottom: 3, left: 5 },
+        borderWidth: { top: 0.35, right: 0.35, bottom: 0.35, left: 0.35 },
+        borderColor: PDF_SAFFRON.borderSoft,
+      }),
+      textField("totalsLine", 15, 61, 180, 11, {
+        fontSize: 10,
+        fontColor: PDF_SAFFRON.deep,
+        lineHeight: 1.22,
+        verticalAlignment: "middle",
+        backgroundColor: PDF_SAFFRON.wash,
+        padding: { top: 3, right: 5, bottom: 3, left: 6 },
+        borderWidth: { top: 0, right: 0, bottom: 0, left: 2.5 },
+        borderColor: PDF_SAFFRON.vivid,
+      }),
+      textField("remarksBlock", 15, 75, 180, 23, {
         fontSize: 9,
-        lineHeight: 1.2,
+        lineHeight: 1.28,
+        fontColor: PDF_SAFFRON.inkSoft,
+        backgroundColor: PDF_SAFFRON.mist,
+        padding: { top: 3, right: 5, bottom: 3, left: 5 },
+        borderWidth: { top: 0.35, right: 0.35, bottom: 0.35, left: 0.35 },
+        borderColor: PDF_SAFFRON.border,
       }),
-      textField("cashSectionTitle", 15, 102, 180, 7, {
-        fontSize: 10,
-        fontColor: "#0f766e",
+      sectionTitle("cashSectionTitle", 101.5, {
+        bg: PDF_SAFFRON.wash,
+        fg: PDF_SAFFRON.deep,
+        border: PDF_SAFFRON.primary,
       }),
       textField("cashItemsBlock", 15, 110, 180, 62, {
         fontSize: 8,
-        lineHeight: 1.2,
+        lineHeight: 1.25,
         overflow: "visible",
+        fontColor: PDF_SAFFRON.ink,
       }),
-      textField("metalSectionTitle", 15, 176, 180, 7, {
-        fontSize: 10,
-        fontColor: "#b45309",
+      sectionTitle("metalSectionTitle", 175.5, {
+        bg: PDF_SAFFRON.mist,
+        fg: PDF_SAFFRON.deep,
+        border: PDF_SAFFRON.vivid,
       }),
       textField("metalItemsBlock", 15, 184, 180, 42, {
         fontSize: 8,
-        lineHeight: 1.2,
+        lineHeight: 1.25,
         overflow: "visible",
+        fontColor: PDF_SAFFRON.ink,
       }),
-      textField("jewellerySectionTitle", 15, 230, 180, 7, {
-        fontSize: 10,
-        fontColor: "#a16207",
+      sectionTitle("jewellerySectionTitle", 229.5, {
+        bg: PDF_SAFFRON.cream,
+        fg: PDF_SAFFRON.ink,
+        border: PDF_SAFFRON.primary,
       }),
       textField("jewelleryItemsBlock", 15, 238, 180, 22, {
         fontSize: 8,
+        lineHeight: 1.25,
+        overflow: "visible",
+        fontColor: PDF_SAFFRON.ink,
+      }),
+      sectionTitle("otherSectionTitle", 261.5, {
+        bg: PDF_SAFFRON.wash,
+        fg: PDF_SAFFRON.muted,
+        border: PDF_SAFFRON.border,
+      }),
+      textField("otherItemsBlock", 15, 270, 180, 15, {
+        fontSize: 8,
         lineHeight: 1.2,
         overflow: "visible",
+        fontColor: PDF_SAFFRON.ink,
       }),
-      textField("otherSectionTitle", 15, 262, 180, 5, {
-        fontSize: 9,
-        fontColor: "#475569",
-      }),
-      textField("otherItemsBlock", 15, 268, 180, 16, {
-        fontSize: 8,
-        lineHeight: 1.15,
-        overflow: "visible",
-      }),
-      textField("footerNote", 15, 286, 180, 10, {
-        fontSize: 7,
-        fontColor: "#64748b",
+      textField("footerNote", 15, 287, 180, 9, {
+        fontSize: 7.5,
+        fontColor: PDF_SAFFRON.muted,
+        lineHeight: 1.35,
+        padding: { top: 2, right: 0, bottom: 0, left: 0 },
+        borderWidth: { top: 0.45, right: 0, bottom: 0, left: 0 },
+        borderColor: PDF_SAFFRON.border,
       }),
     ],
   ],

@@ -1,53 +1,109 @@
 import { BLANK_A4_PDF, type Template } from "@pdfme/common";
+import { PDF_SAFFRON } from "./pdf-theme";
 import { textField } from "./text-field";
 
 /**
  * pdfme template for payment / receipt vouchers (A4).
  * Schemas match `buildVoucherPdfInputs` keys — export as JSON for the pdfme designer if needed.
  */
+const labelMuted = { fontSize: 9 as const, fontColor: PDF_SAFFRON.muted };
+const bodyRow = {
+  fontSize: 10 as const,
+  fontColor: PDF_SAFFRON.inkSoft,
+  lineHeight: 1.22 as const,
+};
+
 export const voucherPdfTemplate: Template = {
   basePdf: BLANK_A4_PDF,
   pdfmeVersion: "6.1.2",
   schemas: [
     [
-      textField("docTitle", 15, 12, 180, 12, {
-        fontSize: 16,
+      textField("docTitle", 15, 10, 180, 15, {
+        fontSize: 17,
         alignment: "center",
-        fontColor: "#0f172a",
+        verticalAlignment: "middle",
+        fontColor: PDF_SAFFRON.ink,
+        backgroundColor: PDF_SAFFRON.cream,
+        characterSpacing: 0.35,
+        padding: { top: 2, right: 6, bottom: 2, left: 6 },
+        borderWidth: { top: 0, right: 0, bottom: 0.75, left: 0 },
+        borderColor: PDF_SAFFRON.border,
       }),
-      textField("voucherNumberLine", 15, 28, 120, 8, { fontSize: 11 }),
-      textField("statusLine", 140, 28, 55, 8, {
+      textField("voucherNumberLine", 15, 28, 118, 8, {
+        fontSize: 11,
+        fontColor: PDF_SAFFRON.ink,
+        verticalAlignment: "middle",
+      }),
+      textField("statusLine", 136, 28, 59, 8, {
         fontSize: 10,
         alignment: "right",
+        verticalAlignment: "middle",
+        fontColor: PDF_SAFFRON.deep,
+        backgroundColor: PDF_SAFFRON.wash,
+        padding: { top: 1, right: 4, bottom: 1, left: 4 },
+        borderWidth: { top: 0.35, right: 0.35, bottom: 0.35, left: 0.35 },
+        borderColor: PDF_SAFFRON.borderSoft,
       }),
-      textField("voucherDateLine", 15, 38, 180, 8, { fontSize: 10 }),
-      textField("counterpartyLabel", 15, 50, 180, 6, {
-        fontSize: 9,
-        fontColor: "#64748b",
+      textField("voucherDateLine", 15, 38, 180, 8, { ...bodyRow }),
+      textField("counterpartyLabel", 15, 49, 180, 6, {
+        ...labelMuted,
+        characterSpacing: 0.15,
       }),
-      textField("counterpartyName", 15, 57, 180, 8, { fontSize: 11 }),
-      textField("counterpartyEmail", 15, 66, 180, 7, { fontSize: 9 }),
-      textField("amountLine", 15, 78, 180, 12, {
-        fontSize: 14,
-        fontColor: "#1d4ed8",
-      }),
-      textField("typeAndMethodLine", 15, 94, 180, 8, { fontSize: 10 }),
-      textField("categoryLine", 15, 104, 180, 7, { fontSize: 9 }),
-      textField("referenceLine", 15, 112, 180, 7, { fontSize: 9 }),
-      textField("bankLine", 15, 120, 180, 7, { fontSize: 9 }),
-      textField("chequeLine", 15, 128, 180, 7, { fontSize: 9 }),
-      textField("metalLine", 15, 136, 180, 7, { fontSize: 9 }),
-      textField("descriptionBlock", 15, 146, 180, 55, {
-        fontSize: 9,
-        lineHeight: 1.25,
-        overflow: "visible",
-      }),
-      textField("approvalLine", 15, 206, 180, 8, { fontSize: 9 }),
-      textField("createdLine", 15, 216, 180, 7, { fontSize: 8, fontColor: "#64748b" }),
-      textField("footerNote", 15, 268, 180, 18, {
-        fontSize: 8,
-        fontColor: "#64748b",
+      textField("counterpartyName", 15, 56, 180, 9, {
+        fontSize: 12,
+        fontColor: PDF_SAFFRON.ink,
         lineHeight: 1.2,
+      }),
+      textField("counterpartyEmail", 15, 66, 180, 7, {
+        fontSize: 9,
+        fontColor: PDF_SAFFRON.muted,
+      }),
+      textField("amountLine", 15, 76, 180, 14, {
+        fontSize: 15,
+        fontColor: PDF_SAFFRON.primary,
+        verticalAlignment: "middle",
+        backgroundColor: PDF_SAFFRON.wash,
+        padding: { top: 3, right: 6, bottom: 3, left: 8 },
+        borderWidth: { top: 0, right: 0, bottom: 0, left: 2.5 },
+        borderColor: PDF_SAFFRON.vivid,
+        lineHeight: 1.15,
+      }),
+      textField("typeAndMethodLine", 15, 93, 180, 8, { ...bodyRow }),
+      textField("categoryLine", 15, 103, 180, 7, { ...labelMuted }),
+      textField("referenceLine", 15, 111, 180, 7, { ...bodyRow, fontSize: 9 }),
+      textField("bankLine", 15, 119, 180, 7, { ...bodyRow, fontSize: 9 }),
+      textField("chequeLine", 15, 127, 180, 7, { ...bodyRow, fontSize: 9 }),
+      textField("metalLine", 15, 135, 180, 7, { ...bodyRow, fontSize: 9 }),
+      textField("descriptionBlock", 15, 145, 180, 56, {
+        fontSize: 9,
+        lineHeight: 1.28,
+        overflow: "visible",
+        fontColor: PDF_SAFFRON.inkSoft,
+        backgroundColor: PDF_SAFFRON.cream,
+        padding: { top: 4, right: 5, bottom: 4, left: 5 },
+        borderWidth: { top: 0.4, right: 0.4, bottom: 0.4, left: 0.4 },
+        borderColor: PDF_SAFFRON.borderSoft,
+      }),
+      textField("approvalLine", 15, 205, 180, 8, {
+        fontSize: 9,
+        fontColor: PDF_SAFFRON.ink,
+        backgroundColor: PDF_SAFFRON.mist,
+        padding: { top: 2, right: 4, bottom: 2, left: 4 },
+        borderWidth: { top: 0, right: 0, bottom: 0, left: 2 },
+        borderColor: PDF_SAFFRON.vivid,
+        verticalAlignment: "middle",
+      }),
+      textField("createdLine", 15, 216, 180, 7, {
+        fontSize: 8,
+        fontColor: PDF_SAFFRON.muted,
+      }),
+      textField("footerNote", 15, 266, 180, 20, {
+        fontSize: 8,
+        fontColor: PDF_SAFFRON.muted,
+        lineHeight: 1.35,
+        padding: { top: 3, right: 0, bottom: 0, left: 0 },
+        borderWidth: { top: 0.5, right: 0, bottom: 0, left: 0 },
+        borderColor: PDF_SAFFRON.border,
       }),
     ],
   ],
