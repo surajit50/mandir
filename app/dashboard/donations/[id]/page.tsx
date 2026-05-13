@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -18,6 +18,7 @@ import {
   Gem,
   Coins,
   Banknote,
+  Printer,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -63,7 +64,6 @@ interface DonationDetail {
 }
 
 export default function DonationDetailPage() {
-  const router = useRouter();
   const params = useParams();
   const donationId = params.id as string;
 
@@ -106,6 +106,19 @@ export default function DonationDetailPage() {
       console.error(err);
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const openDonationPdf = () => {
+    try {
+      window.open(
+        `/api/donations/${donationId}/print`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+    } catch (err) {
+      setError("Failed to open donation PDF");
+      console.error(err);
     }
   };
 
@@ -161,12 +174,23 @@ export default function DonationDetailPage() {
           </Link>
           <h1 className="text-3xl font-bold text-slate-900">Donation Collection Details</h1>
         </div>
-        {!donation.isVerified && (
-          <Button onClick={handleVerify} disabled={isVerifying} className="bg-green-600 hover:bg-green-700">
-            {isVerifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isVerifying ? "Verifying..." : "Verify Collection"}
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={openDonationPdf}
+          >
+            <Printer className="w-4 h-4" />
+            Print PDF
           </Button>
-        )}
+          {!donation.isVerified && (
+            <Button onClick={handleVerify} disabled={isVerifying} className="bg-green-600 hover:bg-green-700">
+              {isVerifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isVerifying ? "Verifying..." : "Verify Collection"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Status Banner */}
