@@ -1,3 +1,4 @@
+// app/api/bank-accounts/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -15,20 +16,13 @@ const BankAccountSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
     const userRole = (session.user as any).role;
-
-    // Only ADMIN and ACCOUNTANT can create bank accounts
     if (!["ADMIN", "ACCOUNTANT"].includes(userRole)) {
       return NextResponse.json(
-        { error: "Forbidden - Only admins and accountants can create bank accounts" },
+        { error: "Forbidden" },
         { status: 403 }
       );
     }
@@ -36,11 +30,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = BankAccountSchema.parse(body);
 
-    // Check if account number already exists
     const existingAccount = await prisma.bankAccount.findUnique({
       where: { accountNumber: validatedData.accountNumber },
     });
-
     if (existingAccount) {
       return NextResponse.json(
         { error: "Account number already exists" },
@@ -59,7 +51,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Log audit
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
@@ -81,7 +72,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
     console.error("Bank account creation error:", error);
     return NextResponse.json(
       { error: "Failed to create bank account" },
@@ -93,18 +83,18 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    console.log("Fetching bank accounts...");
 
     const bankAccounts = await prisma.bankAccount.findMany({
       where: { isActive: true },
       orderBy: { createdAt: "desc" },
     });
+
+    console.log("Bank accounts fetched:", bankAccounts.length);
 
     return NextResponse.json(bankAccounts);
   } catch (error) {
