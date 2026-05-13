@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Cheque validation (PAYMENT + CHEQUE method) ───────────────────────
-    let selectedCheque: { id: string; chequeNumber: string; amount: number; payeeName: string } | null = null;
+    let selectedCheque: { id: string; chequeNumber: string; amount: number; paymentVouchers: { id: string }[] } | null = null;
 
     if (data.voucherType === "PAYMENT" && data.paymentMethod === "CHEQUE") {
       if (!data.chequeId) {
@@ -108,19 +108,24 @@ export async function POST(request: NextRequest) {
       }
       selectedCheque = await prisma.chequeRegister.findFirst({
         where: { id: data.chequeId, status: "ISSUED" },
-        select: { id: true, chequeNumber: true, amount: true, payeeName: true },
+        select: {
+          id: true,
+          chequeNumber: true,
+          amount: true,
+          paymentVouchers: { select: { id: true } }, // check existing links
+        },
       });
       if (!selectedCheque) {
         return NextResponse.json({ error: "Selected cheque is invalid or no longer available" }, { status: 400 });
       }
-      const isUnassigned = selectedCheque.payeeName === "UNASSIGNED" && selectedCheque.amount === 0;
+      // A cheque is "unassigned" if it has no linked payment vouchers AND amount is 0
+      const isUnassigned = selectedCheque.paymentVouchers.length === 0 && selectedCheque.amount === 0;
       if (!isUnassigned && selectedCheque.amount !== data.amount) {
         return NextResponse.json({ error: "Voucher amount must match cheque amount" }, { status: 400 });
       }
     }
 
     // ── Bank account pre-check for PAYMENT vouchers ───────────────────────
-    // We only guard here for instant-APPROVED receipts (credit side is fine).
     // Full guard for PAYMENT vouchers runs at APPROVE time.
 
     const voucherNumber = await generateVoucherNumber(data.voucherType);
@@ -159,11 +164,11 @@ export async function POST(request: NextRequest) {
         include: { payee: { select: { id: true, name: true, email: true } } },
       });
 
-      // 2. Update unassigned cheque leaf details (no balance change yet)
+      // 2. Update unassigned cheque leaf details (only amount, no payeeName)
       if (selectedCheque) {
         await tx.chequeRegister.update({
           where: { id: selectedCheque.id },
-          data: { amount: data.amount, payeeName: payee!.name },
+          data: { amount: data.amount },
         });
       }
 
