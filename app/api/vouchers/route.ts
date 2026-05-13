@@ -174,8 +174,6 @@ export async function POST(request: NextRequest) {
             chequeNumber: data.referenceNumber,
             chequeDate: data.referenceDate ? new Date(data.referenceDate) : new Date(data.voucherDate),
             amount: data.amount,
-            payeeName: "Temple Trust",
-            payerName: payee!.name,
             chequeType: "RECEIVED",
             status: "DEPOSITED",
             accountId: data.bankAccountId,
