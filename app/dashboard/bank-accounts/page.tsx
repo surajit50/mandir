@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Eye, TrendingUp, DollarSign } from "lucide-react";
+import { Plus, Eye, TrendingUp, DollarSign, BookOpen } from "lucide-react";
 import useSWR from "swr";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -140,6 +140,12 @@ export default function BankAccountsPage() {
                     <Button variant="outline" size="sm">
                       <Eye className="w-4 h-4 mr-2" />
                       Details
+                    </Button>
+                  </Link>
+                  <Link href={`/dashboard/bank-accounts/${account.id}/passbook`}>
+                    <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                      <BookOpen className="w-4 h-4 mr-2" />
+                      Passbook
                     </Button>
                   </Link>
                 </div>
