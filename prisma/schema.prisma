@@ -916,7 +916,7 @@ model JewelleryAsset {
   @@index([metalType])
 }
 model BankTransaction {
-  id              String    @id @default(cuid())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
   bankAccountId   String
   bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id])
   amount          Float
