@@ -5,11 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const IssueChequeSchema = z.object({
-  payeeName: z.string().min(1, "Payee name is required"),
   amount: z.number().positive("Amount must be positive"),
 });
 
-// PATCH /api/cheques/[id]/issue — issue a blank cheque leaf to a payee with amount
+// PATCH /api/cheques/[id]/issue — assign amount to a blank cheque (via PaymentVoucher)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -33,22 +32,22 @@ export async function PATCH(
     const body = await request.json();
     const validated = IssueChequeSchema.parse(body);
 
-    // Only allow issuing if the cheque is currently unassigned/blank (ISSUED status with no payee)
+    // Find the cheque
     const cheque = await prisma.chequeRegister.findUnique({
       where: { id },
-      select: { id: true, status: true, payeeName: true, amount: true },
+      select: { id: true, status: true, amount: true },
     });
 
     if (!cheque) {
       return NextResponse.json({ error: "Cheque not found" }, { status: 404 });
     }
 
-    // Allow issuing unassigned cheques (ISSUED with UNASSIGNED payee or 0 amount)
-    const isUnassigned = cheque.payeeName === "UNASSIGNED" || cheque.amount === 0;
+    // Allow issuing unassigned cheques (ISSUED with amount 0)
+    const isBlank = cheque.amount === 0;
 
-    if (cheque.status !== "ISSUED" || !isUnassigned) {
+    if (cheque.status !== "ISSUED" || !isBlank) {
       return NextResponse.json(
-        { error: "Only unassigned cheque leaves can be issued for payment" },
+        { error: "Only blank cheque leaves can be issued" },
         { status: 400 }
       );
     }
@@ -56,10 +55,8 @@ export async function PATCH(
     const updated = await prisma.chequeRegister.update({
       where: { id },
       data: {
-        payeeName: validated.payeeName,
         amount: validated.amount,
-        chequeDate: new Date(), // Set issue date to now
-        status: "ISSUED",
+        chequeDate: new Date(),
       },
     });
 
