@@ -915,3 +915,15 @@ model JewelleryAsset {
 
   @@index([metalType])
 }
+model BankTransaction {
+  id              String    @id @default(cuid())
+  bankAccountId   String
+  bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id])
+  amount          Float
+  type            String    // "CREDIT" or "DEBIT"
+  description     String?
+  voucherId       String?
+  paymentVoucher  PaymentVoucher? @relation(fields: [voucherId], references: [id])
+  transactionDate DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+}
