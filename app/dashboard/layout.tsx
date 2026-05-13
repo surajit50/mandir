@@ -17,11 +17,11 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-muted/40">
-      <Sidebar role={session.user?.role as string} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header user={session.user} />
-        <main className="flex-1 overflow-auto p-6">
+    <div className="flex h-screen bg-muted/40 overflow-hidden">
+      <Sidebar role={session.user?.role as string} className="hidden lg:flex h-screen" />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Header user={session.user} role={session.user?.role as string} />
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           {children}
         </main>
       </div>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Plus, Gem, Scale, User } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 interface JewelleryAsset {
   id: string;
@@ -21,6 +22,8 @@ interface JewelleryAsset {
 }
 
 export default function JewelleryPage() {
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
   const [items, setItems] = useState<JewelleryAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,12 +69,14 @@ export default function JewelleryPage() {
           <h1 className="text-2xl font-bold text-foreground">Jewellery Register</h1>
           <p className="text-muted-foreground mt-1">Inventory of gold and silver offerings and assets</p>
         </div>
-        <Link href="/dashboard/jewellery/new">
-          <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4" />
-            New Entry
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/jewellery/new">
+            <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4" />
+              New Entry
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -144,9 +149,11 @@ export default function JewelleryPage() {
             <div className="py-12 text-center">
               <Gem className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
               <p className="text-muted-foreground">No jewellery entries found</p>
-              <Link href="/dashboard/jewellery/new" className="mt-4 inline-block">
-                <Button variant="outline" size="sm">Add new entry</Button>
-              </Link>
+              {userRole !== "ADMIN" && (
+                <Link href="/dashboard/jewellery/new" className="mt-4 inline-block">
+                  <Button variant="outline" size="sm">Add new entry</Button>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

@@ -2,70 +2,75 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
-
-const assetSchema = z.object({
-  assetCode: z.string(),
-  assetName: z.string(),
-  category: z.string(),
-  description: z.string().optional().nullable(),
-  purchaseDate: z.string().optional().nullable(),
-  purchaseValue: z.number().default(0),
-  location: z.string().optional().nullable(),
-  condition: z.string().optional().nullable(),
-});
+import { AssetSchema } from "@/lib/validations/assets";
+import { 
+  successResponse, 
+  errorResponse, 
+  unauthorizedResponse, 
+  forbiddenResponse, 
+  validationErrorResponse, 
+  serverErrorResponse 
+} from "@/lib/api-utils";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) return unauthorizedResponse();
+
+    const { searchParams } = new URL(req.url);
+    const category = searchParams.get("category");
 
     const assets = await prisma.mandirAsset.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(category ? { category } : {}),
+      },
       orderBy: { assetCode: "asc" },
     });
 
-    return NextResponse.json(assets);
+    return successResponse(assets);
   } catch (error) {
-    console.error("Get assets error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch assets" },
-      { status: 500 }
-    );
+    return serverErrorResponse(error, "Failed to fetch assets");
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) return unauthorizedResponse();
 
     if (!["ADMIN", "ACCOUNTANT"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return forbiddenResponse();
     }
 
     const body = await req.json();
-    const validated = assetSchema.parse(body);
+    const result = AssetSchema.safeParse(body);
 
-    const existing = await prisma.mandirAsset.findUnique({
-      where: { assetCode: validated.assetCode },
-    });
+    if (!result.success) {
+      return validationErrorResponse(result.error);
+    }
 
+    const { assetCode, assetName, category, description, purchaseDate, purchaseValue, location, condition } =
+      result.data;
+
+    const existing = await prisma.mandirAsset.findUnique({ where: { assetCode } });
     if (existing) {
-      return NextResponse.json(
-        { error: "Asset code already exists" },
-        { status: 400 }
-      );
+      return errorResponse("Asset code already exists", 409);
     }
 
     const asset = await prisma.mandirAsset.create({
       data: {
-        ...validated,
-        purchaseDate: validated.purchaseDate ? new Date(validated.purchaseDate) : null,
+        assetCode,
+        assetName,
+        category,
+        description: description || null,
+        purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
+        purchaseValue: purchaseValue ?? 0,
+        location: location || null,
+        condition: condition || null,
       },
     });
 
-    // Log audit
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
@@ -80,12 +85,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(asset, { status: 201 });
+    return successResponse(asset, 201);
   } catch (error) {
-    console.error("Create asset error:", error);
-    return NextResponse.json(
-      { error: error instanceof z.ZodError ? error.errors : "Failed to create asset" },
-      { status: 400 }
-    );
+    return serverErrorResponse(error, "Failed to create asset");
   }
 }

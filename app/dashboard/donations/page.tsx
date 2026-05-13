@@ -104,12 +104,14 @@ export default function DonationsPage() {
             Manage and verify donation collections
           </p>
         </div>
-        <Link href="/dashboard/donations/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            New Collection
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/donations/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
+              New Collection
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Summary */}
@@ -299,11 +301,13 @@ export default function DonationsPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <p className="text-muted-foreground">No donation collections found</p>
-            <Link href="/dashboard/donations/new">
-              <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
-                Create First Collection
-              </Button>
-            </Link>
+            {userRole !== "ADMIN" && (
+              <Link href="/dashboard/donations/new">
+                <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
+                  Create First Collection
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       )}

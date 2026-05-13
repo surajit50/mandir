@@ -4,14 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
-const BankDepositSchema = z.object({
-  depositDate: z.string().datetime(),
-  accountId: z.string().min(1, "Account is required"),
-  totalAmount: z.number().positive("Amount must be greater than 0"),
-  depositType: z.enum(["CASH", "CHEQUE", "MIXED"]),
-  chequeIds: z.array(z.string()).optional(),
-  remarks: z.string().optional(),
-});
+import { BankDepositSchema } from "@/lib/validations/accounting";
+import { postTransaction } from "@/lib/accounting/gl-service";
 
 // Generate deposit number
 async function generateDepositNumber(): Promise<string> {
@@ -125,6 +119,30 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+
+      // ===== NEW: Double-Entry GL Posting =====
+      const entries: { accountCode: string, accountName: string, accountType: string, debit?: number, credit?: number }[] = [];
+      
+      // Debit Bank Account
+      entries.push({ accountCode: "1002", accountName: "Bank Account", accountType: "Asset", debit: validatedData.totalAmount });
+      
+      // Credit Cash / Cheque in transit
+      if (cashPortion > 0) {
+        entries.push({ accountCode: "1001", accountName: "Cash Account", accountType: "Asset", credit: cashPortion });
+      }
+      if (chequeTotal > 0) {
+        entries.push({ accountCode: "1003", accountName: "Cheques in Hand", accountType: "Asset", credit: chequeTotal });
+      }
+
+      await postTransaction(tx, {
+        date: new Date(validatedData.depositDate),
+        description: `Bank Deposit - ${d.depositNumber}`,
+        referenceType: "BankDeposit",
+        referenceId: d.id,
+        financialYearId: currentFY?.id,
+        entries
+      });
+      // ===== End GL Posting =====
 
       // Log audit
       await tx.auditLog.create({

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Plus, ExternalLink } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 interface GLAccount {
   id: string;
@@ -18,6 +19,8 @@ interface GLAccount {
 }
 
 export default function GLAccountsPage() {
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
   const [accounts, setAccounts] = useState<GLAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +57,14 @@ export default function GLAccountsPage() {
           <h1 className="text-3xl font-bold">General Ledger Accounts</h1>
           <p className="text-gray-600 mt-1">Manage chart of accounts</p>
         </div>
-        <Link href="/dashboard/gl-accounts/new">
-          <Button className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            New Account
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/gl-accounts/new">
+            <Button className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              New Account
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (

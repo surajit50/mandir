@@ -1,15 +1,18 @@
 "use client";
 
 import { User as SessionUser } from "next-auth";
-import { Bell, Sun, Moon, ChevronRight, Home, Calendar } from "lucide-react";
+import { Bell, Sun, Moon, ChevronRight, Home, Calendar, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
 import { useMemo, useEffect, useState } from "react";
 import { getLabelForPath } from "@/lib/menu-utils";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import Sidebar from "./sidebar";
 
 interface HeaderProps {
   user?: SessionUser;
+  role: string;
 }
 
 interface FinancialYear {
@@ -31,10 +34,11 @@ function getInitials(name?: string | null): string {
     .slice(0, 2);
 }
 
-export default function Header({ user }: HeaderProps) {
+export default function Header({ user, role }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const [currentFY, setCurrentFY] = useState<FinancialYear | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/financial-years?isCurrent=true")
@@ -60,9 +64,29 @@ export default function Header({ user }: HeaderProps) {
   }, [pathname]);
 
   return (
-    <header className="bg-background border-b border-border px-6 py-3 flex items-center justify-between sticky top-0 z-10">
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-1.5 text-sm">
+    <header className="bg-background border-b border-border px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+      <div className="flex items-center gap-4">
+        {/* Mobile Sidebar Trigger */}
+        <div className="lg:hidden">
+          <Sheet open={isOpen} onOpenChange={setIsOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="p-0 w-64 border-none">
+              <Sidebar 
+                role={role} 
+                className="w-full h-full border-none shadow-none" 
+                onItemClick={() => setIsOpen(false)}
+              />
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        {/* Breadcrumbs */}
+        <nav className="hidden sm:flex items-center gap-1.5 text-sm">
         {breadcrumbs.map((crumb, index) => (
           <span key={crumb.href} className="flex items-center gap-1.5">
             {index > 0 && (
@@ -78,6 +102,7 @@ export default function Header({ user }: HeaderProps) {
           </span>
         ))}
       </nav>
+    </div>
 
       <div className="flex items-center gap-3">
         {/* Financial Year Badge */}

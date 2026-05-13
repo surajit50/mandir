@@ -3,13 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-
-const festivalSchema = z.object({
-  festivalName: z.string(),
-  festivalDate: z.string().datetime(),
-  description: z.string().optional(),
-  budgetAmount: z.number().default(0),
-});
+import { FestivalSchema } from "@/lib/validations/assets";
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,12 +19,10 @@ export async function GET(req: NextRequest) {
       orderBy: { festivalDate: "desc" },
     });
 
-    // Calculate summary for each festival
     const enriched = festivals.map((festival) => {
       const income = festival.festivalTransactions
         .filter((t) => t.transactionType === "Income")
         .reduce((sum, t) => sum + t.amount, 0);
-
       const expense = festival.festivalTransactions
         .filter((t) => t.transactionType === "Expense")
         .reduce((sum, t) => sum + t.amount, 0);
@@ -46,10 +38,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(enriched);
   } catch (error) {
     console.error("Get festivals error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch festivals" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch festivals" }, { status: 500 });
   }
 }
 
@@ -63,18 +52,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const validated = festivalSchema.parse(body);
+    const result = FestivalSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: result.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const { festivalName, festivalDate, description, budgetAmount } = result.data;
 
     const festival = await prisma.festival.create({
       data: {
-        festivalName: validated.festivalName,
-        festivalDate: new Date(validated.festivalDate),
-        description: validated.description,
-        budgetAmount: validated.budgetAmount,
+        festivalName,
+        festivalDate: new Date(festivalDate),
+        description: description || null,
+        budgetAmount: budgetAmount ?? 0,
       },
     });
 
-    // Log audit
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
@@ -92,9 +89,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(festival, { status: 201 });
   } catch (error) {
     console.error("Create festival error:", error);
-    return NextResponse.json(
-      { error: error instanceof z.ZodError ? error.errors : "Failed to create festival" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Failed to create festival" }, { status: 500 });
   }
 }

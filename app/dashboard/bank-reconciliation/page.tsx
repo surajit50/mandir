@@ -99,12 +99,14 @@ export default function BankReconciliationPage() {
             Reconcile bank accounts with cash book
           </p>
         </div>
-        <Link href="/dashboard/bank-reconciliation/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4 mr-2" />
-            New Reconciliation
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/bank-reconciliation/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New Reconciliation
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
@@ -238,11 +240,13 @@ export default function BankReconciliationPage() {
         <Card>
           <CardContent className="pt-6 text-center">
             <p className="text-muted-foreground">No reconciliations found</p>
-            <Link href="/dashboard/bank-reconciliation/new">
-              <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
-                Start Reconciliation
-              </Button>
-            </Link>
+            {userRole !== "ADMIN" && (
+              <Link href="/dashboard/bank-reconciliation/new">
+                <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
+                  Start Reconciliation
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       )}

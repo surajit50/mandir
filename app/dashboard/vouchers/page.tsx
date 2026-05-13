@@ -44,6 +44,7 @@ interface PaymentVoucher {
     id: string;
     name: string;
     email: string;
+    payeeType?: string;
   };
   createdAt: string;
 }
@@ -165,15 +166,17 @@ export default function VouchersPage() {
             Create and manage payment and receipt vouchers
           </p>
         </div>
-        <Link href="/dashboard/vouchers/new">
-          <Button
-            size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 shadow-sm"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Voucher
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/vouchers/new">
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Voucher
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Search & Filters */}
@@ -347,8 +350,13 @@ export default function VouchersPage() {
                       <TableCell className="text-muted-foreground text-sm">
                         {formatDate(voucher.voucherDate)}
                       </TableCell>
-                      <TableCell className="text-foreground font-medium">
-                        {voucher.payee.name}
+                      <TableCell className="text-foreground">
+                        <div className="font-medium">{voucher.payee.name}</div>
+                        {voucher.payee.payeeType && (
+                          <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mt-0.5">
+                            {voucher.payee.payeeType.replace(/_/g, " ")}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground max-w-[180px] truncate text-sm">
                         {voucher.description}
@@ -415,12 +423,14 @@ export default function VouchersPage() {
                 ? "No vouchers match your current filters. Try adjusting your search or filters."
                 : "Get started by creating your first payment or receipt voucher."}
             </p>
-            <Link href="/dashboard/vouchers/new">
-              <Button className="bg-emerald-600 hover:bg-emerald-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Create First Voucher
-              </Button>
-            </Link>
+            {userRole !== "ADMIN" && (
+              <Link href="/dashboard/vouchers/new">
+                <Button className="bg-emerald-600 hover:bg-emerald-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create First Voucher
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       )}

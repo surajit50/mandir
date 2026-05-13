@@ -15,6 +15,9 @@ import {
   ListChecks,
   Package,
   Gem,
+  Plus,
+  Handshake,
+  Landmark,
 } from "lucide-react";
 
 export type Role = "ADMIN" | "ACCOUNTANT" | "MEMBER";
@@ -42,21 +45,79 @@ export const menuGroups: MenuGroup[] = [
         roles: true,
       },
       {
+        label: "Trust Committee",
+        href: "/dashboard/committee",
+        icon: Landmark,
+        roles: true,
+      },
+      {
         label: "Reports",
         href: "/dashboard/reports",
         icon: FileText,
         roles: ["ADMIN", "ACCOUNTANT"],
       },
+    ],
+  },
+  {
+    group: "Approvals & Review",
+    items: [
       {
-        label: "Filing",
-        href: "/dashboard/filing",
-        icon: Archive,
+        label: "Voucher Approvals",
+        href: "/dashboard/vouchers",
+        icon: ListChecks,
+        roles: ["ADMIN"],
+      },
+      {
+        label: "Vouchers",
+        href: "/dashboard/vouchers",
+        icon: ListChecks,
+        roles: ["ACCOUNTANT"],
+      },
+      {
+        label: "Bank Deposits",
+        href: "/dashboard/bank-deposits",
+        icon: TrendingDown,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        label: "Cash Handovers",
+        href: "/dashboard/cash-handovers",
+        icon: Wallet,
         roles: ["ADMIN", "ACCOUNTANT"],
       },
     ],
   },
   {
-    group: "Financial",
+    group: "Data Entry",
+    items: [
+      {
+        label: "New Voucher",
+        href: "/dashboard/vouchers/new",
+        icon: Plus,
+        roles: ["ACCOUNTANT"],
+      },
+      {
+        label: "Donations / Collections",
+        href: "/dashboard/donations",
+        icon: Gift,
+        roles: ["ACCOUNTANT", "MEMBER"],
+      },
+      {
+        label: "Cheque Register",
+        href: "/dashboard/cheques",
+        icon: CreditCard,
+        roles: ["ACCOUNTANT"],
+      },
+      {
+        label: "Bank Reconciliation",
+        href: "/dashboard/bank-reconciliation",
+        icon: Building2,
+        roles: ["ACCOUNTANT"],
+      },
+    ],
+  },
+  {
+    group: "Financial Books",
     items: [
       {
         label: "Cash Ledger",
@@ -71,9 +132,49 @@ export const menuGroups: MenuGroup[] = [
         roles: ["ADMIN", "ACCOUNTANT"],
       },
       {
-        label: "Vouchers",
-        href: "/dashboard/vouchers",
-        icon: FileText,
+        label: "Bank Passbook",
+        href: "/dashboard/bank-passbook",
+        icon: BookOpen,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+    ],
+  },
+  {
+    group: "Banking & Assets",
+    items: [
+      {
+        label: "Bank Accounts",
+        href: "/dashboard/bank-accounts",
+        icon: Building2,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        label: "Asset Register",
+        href: "/dashboard/assets",
+        icon: Package,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        label: "Jewellery Register",
+        href: "/dashboard/jewellery",
+        icon: Gem,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        label: "Inventory",
+        href: "/dashboard/inventory",
+        icon: ShoppingCart,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+    ],
+  },
+  {
+    group: "Operations",
+    items: [
+      {
+        label: "Festivals",
+        href: "/dashboard/festivals",
+        icon: Calendar,
         roles: ["ADMIN", "ACCOUNTANT"],
       },
       {
@@ -88,91 +189,16 @@ export const menuGroups: MenuGroup[] = [
         icon: Calendar,
         roles: ["ADMIN"],
       },
-    ],
-  },
-  {
-    group: "Banking",
-    items: [
       {
-        label: "Bank Accounts",
-        href: "/dashboard/bank-accounts",
-        icon: Building2,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-      {
-        label: "Bank Passbook",
-        href: "/dashboard/bank-passbook",
-        icon: BookOpen,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-      {
-        label: "Bank Reconciliation",
-        href: "/dashboard/bank-reconciliation",
-        icon: Building2,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-      {
-        label: "Cheque Register",
-        href: "/dashboard/cheques",
-        icon: CreditCard,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-      {
-        label: "Bank Deposits",
-        href: "/dashboard/bank-deposits",
-        icon: TrendingDown,
+        label: "Filing",
+        href: "/dashboard/filing",
+        icon: Archive,
         roles: ["ADMIN", "ACCOUNTANT"],
       },
     ],
   },
   {
-    group: "Asset Management",
-    items: [
-      {
-        label: "Asset Register",
-        href: "/dashboard/assets",
-        icon: Package,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-      {
-        label: "Jewellery Register",
-        href: "/dashboard/jewellery",
-        icon: Gem,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-    ],
-  },
-  {
-    group: "Operations",
-    items: [
-      {
-        label: "Donations",
-        href: "/dashboard/donations",
-        icon: Gift,
-        roles: ["ADMIN", "ACCOUNTANT", "MEMBER"],
-      },
-      {
-        label: "Cash Handovers",
-        href: "/dashboard/cash-handovers",
-        icon: Wallet,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-      {
-        label: "Festivals",
-        href: "/dashboard/festivals",
-        icon: Calendar,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-      {
-        label: "Inventory",
-        href: "/dashboard/inventory",
-        icon: ShoppingCart,
-        roles: ["ADMIN", "ACCOUNTANT"],
-      },
-    ],
-  },
-  {
-    group: "System",
+    group: "System Management",
     items: [
       {
         label: "Members",

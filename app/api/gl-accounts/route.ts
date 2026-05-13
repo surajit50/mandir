@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import {prisma} from "@/lib/prisma";
-import { z } from "zod";
-
-const glAccountSchema = z.object({
-  accountCode: z.string().min(3),
-  accountName: z.string(),
-  accountType: z.enum(["Asset", "Liability", "Equity", "Income", "Expense"]),
-  subType: z.string().optional(),
-  description: z.string().optional(),
-  openingBalance: z.number().default(0),
-});
+import { prisma } from "@/lib/prisma";
+import { GLAccountSchema } from "@/lib/validations/accounting";
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,11 +12,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const accountType = searchParams.get("accountType");
 
-    const where: any = { isActive: true };
-    if (accountType) where.accountType = accountType;
-
     const accounts = await prisma.gLAccount.findMany({
-      where,
+      where: {
+        isActive: true,
+        ...(accountType ? { accountType } : {}),
+      },
       include: {
         postings: {
           select: { debitAmount: true, creditAmount: true },
@@ -34,20 +25,19 @@ export async function GET(req: NextRequest) {
       orderBy: { accountCode: "asc" },
     });
 
-    // Calculate balances
     const enriched = accounts.map((acc) => ({
       ...acc,
       totalDebits: acc.postings.reduce((sum, p) => sum + p.debitAmount, 0),
       totalCredits: acc.postings.reduce((sum, p) => sum + p.creditAmount, 0),
+      runningBalance:
+        acc.openingBalance +
+        acc.postings.reduce((sum, p) => sum + p.creditAmount - p.debitAmount, 0),
     }));
 
     return NextResponse.json(enriched);
   } catch (error) {
     console.error("Get GL accounts error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch GL accounts" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch GL accounts" }, { status: 500 });
   }
 }
 
@@ -57,32 +47,39 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden – only Admins can create GL accounts" }, { status: 403 });
     }
 
     const body = await req.json();
-    const validated = glAccountSchema.parse(body);
+    const result = GLAccountSchema.safeParse(body);
 
-    // Check if account code exists
-    const existing = await prisma.gLAccount.findUnique({
-      where: { accountCode: validated.accountCode },
-    });
-
-    if (existing) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: "Account code already exists" },
+        { error: "Validation failed", details: result.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
 
+    const { accountCode, accountName, accountType, subType, description, openingBalance } =
+      result.data;
+
+    const existing = await prisma.gLAccount.findUnique({ where: { accountCode } });
+    if (existing) {
+      return NextResponse.json({ error: "Account code already exists" }, { status: 409 });
+    }
+
     const account = await prisma.gLAccount.create({
       data: {
-        ...validated,
-        currentBalance: validated.openingBalance,
+        accountCode,
+        accountName,
+        accountType,
+        subType: subType || null,
+        description: description || null,
+        openingBalance: openingBalance ?? 0,
+        currentBalance: openingBalance ?? 0,
       },
     });
 
-    // Log audit
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
@@ -100,9 +97,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(account, { status: 201 });
   } catch (error) {
     console.error("Create GL account error:", error);
-    return NextResponse.json(
-      { error: error instanceof z.ZodError ? error.errors : "Failed to create account" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Failed to create account" }, { status: 500 });
   }
 }

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { FileQuestion, Home, ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { FileQuestion, Home, ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function NotFound() {
   const router = useRouter();
@@ -16,7 +16,7 @@ export default function NotFound() {
             <FileQuestion className="w-12 h-12 text-amber-600" />
           </div>
         </div>
-
+        
         <div className="space-y-2">
           <h1 className="text-2xl font-bold text-slate-900">Page Not Found</h1>
           <p className="text-slate-600">
@@ -31,9 +31,9 @@ export default function NotFound() {
               Go to Dashboard
             </Button>
           </Link>
-
-          <Button
-            variant="outline"
+          
+          <Button 
+            variant="outline" 
             className="w-full flex items-center justify-center gap-2"
             onClick={() => router.back()}
           >

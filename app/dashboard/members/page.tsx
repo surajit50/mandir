@@ -121,7 +121,8 @@ export default function MembersPage() {
                 <tr>
                   <th className="text-left py-3 px-4 font-semibold">Name</th>
                   <th className="text-left py-3 px-4 font-semibold">Email</th>
-                  <th className="text-left py-3 px-4 font-semibold">Role</th>
+                  <th className="text-left py-3 px-4 font-semibold">System Role</th>
+                  <th className="text-left py-3 px-4 font-semibold">Temple Role</th>
                   <th className="text-left py-3 px-4 font-semibold">Status</th>
                   <th className="text-left py-3 px-4 font-semibold">Actions</th>
                 </tr>
@@ -135,6 +136,11 @@ export default function MembersPage() {
                       <td className="py-3 px-4">
                         <Badge className={getRoleBadgeColor(member.role)}>
                           {member.role}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold text-muted-foreground border-muted-foreground/20">
+                          {member.userType?.replace(/_/g, ' ') || 'MEMBER'}
                         </Badge>
                       </td>
                       <td className="py-3 px-4">

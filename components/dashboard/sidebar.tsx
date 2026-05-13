@@ -31,14 +31,16 @@ import { getVisibleMenuItems } from "@/lib/menu-utils";
 
 interface SidebarProps {
   role: string;
+  className?: string;
+  onItemClick?: () => void;
 }
 
-export default function Sidebar({ role }: SidebarProps) {
+export default function Sidebar({ role, className, onItemClick }: SidebarProps) {
   const pathname = usePathname();
   const visibleMenuGroups = getVisibleMenuItems(role);
 
   return (
-    <aside className="w-64 bg-sidebar text-sidebar-foreground flex flex-col h-screen border-r border-sidebar-border">
+    <aside className={cn("w-64 bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border", className)}>
       {/* Branding */}
       <div className="p-5 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
@@ -74,6 +76,7 @@ export default function Sidebar({ role }: SidebarProps) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={onItemClick}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 group relative",
                       isActive

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Plus, Calendar } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 interface Festival {
   id: string;
@@ -17,6 +18,8 @@ interface Festival {
 }
 
 export default function FestivalsPage() {
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +57,14 @@ export default function FestivalsPage() {
           <h1 className="text-2xl font-bold text-foreground">Festival Management</h1>
           <p className="text-muted-foreground mt-1">Track festival-wise income and expenses</p>
         </div>
-        <Link href="/dashboard/festivals/new">
-          <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4" />
-            New Festival
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/festivals/new">
+            <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4" />
+              New Festival
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (

@@ -93,6 +93,32 @@ export default function FinancialYearDetailPage() {
     }
   };
 
+  const closePeriod = async (periodId: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to close this period? This action cannot be undone.",
+      )
+    )
+      return;
+    try {
+      const res = await fetch(
+        `/api/financial-years/periods/${periodId}/close`,
+        {
+          method: "POST",
+        },
+      );
+      if (res.ok) {
+        toast.success("Period closed successfully");
+        fetchYear();
+      } else {
+        const error = await res.json();
+        toast.error(error.error || "Failed to close period");
+      }
+    } catch (error) {
+      toast.error("An error occurred");
+    }
+  };
+
   if (loading)
     return (
       <div className="flex items-center justify-center h-[400px]">
@@ -248,7 +274,11 @@ export default function FinancialYearDetailPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {!p.isClosed && !year.isLocked && (
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => closePeriod(p.id)}
+                        >
                           Close Period
                         </Button>
                       )}

@@ -6,8 +6,8 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    // Redirect unauthenticated users to login
-    if (!token && !pathname.startsWith("/auth")) {
+    // Redirect unauthenticated users to login, but allow access to / (home) and /auth
+    if (!token && !pathname.startsWith("/auth") && pathname !== "/") {
       return NextResponse.redirect(new URL("/auth/login", req.url));
     }
 
@@ -38,7 +38,12 @@ export default withAuth(
   },
   {
     callbacks: {
-      authorized: ({ token }) => {
+      authorized: ({ token, req }) => {
+        const { pathname } = req.nextUrl;
+        // Allow public access to home and auth pages
+        if (pathname === "/" || pathname.startsWith("/auth")) {
+          return true;
+        }
         return !!token;
       },
     },

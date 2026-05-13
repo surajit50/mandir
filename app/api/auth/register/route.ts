@@ -7,10 +7,9 @@ const RegisterSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().min(2, "Name must be at least 2 characters"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+  confirmPassword: z.string().optional(),
+  role: z.enum(["ADMIN", "ACCOUNTANT", "MEMBER"]).optional(),
+  userType: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -38,13 +37,15 @@ export async function POST(request: NextRequest) {
         email: validatedData.email,
         name: validatedData.name,
         passwordHash,
-        role: "MEMBER", // Default role
+        role: validatedData.role || "MEMBER",
+        userType: (validatedData as any).userType || "MEMBER",
       },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
+        userType: true,
         createdAt: true,
       },
     });

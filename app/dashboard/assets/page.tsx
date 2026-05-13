@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, Plus, Package, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 interface MandirAsset {
   id: string;
@@ -20,6 +21,8 @@ interface MandirAsset {
 }
 
 export default function AssetsPage() {
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
   const [assets, setAssets] = useState<MandirAsset[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,12 +71,14 @@ export default function AssetsPage() {
             Track and manage temple fixed assets
           </p>
         </div>
-        <Link href="/dashboard/assets/new">
-          <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4" />
-            New Asset
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/assets/new">
+            <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4" />
+              New Asset
+            </Button>
+          </Link>
+        )}
       </div>
 
       {!loading && assets.length > 0 && (
@@ -134,11 +139,13 @@ export default function AssetsPage() {
               <p className="text-muted-foreground">
                 No assets found in the register
               </p>
-              <Link href="/dashboard/assets/new" className="mt-4 inline-block">
-                <Button variant="outline" size="sm">
-                  Add your first asset
-                </Button>
-              </Link>
+              {userRole !== "ADMIN" && (
+                <Link href="/dashboard/assets/new" className="mt-4 inline-block">
+                  <Button variant="outline" size="sm">
+                    Add your first asset
+                  </Button>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

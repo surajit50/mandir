@@ -16,8 +16,12 @@ import {
   Loader2,
   ArrowLeft,
   Printer,
+  Pencil,
+  Trash2,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 
 interface VoucherDetail {
   id: string;
@@ -43,6 +47,8 @@ export default function VoucherDetailPage() {
   const params = useParams();
   const voucherId = params.id as string;
 
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
   const [voucher, setVoucher] = useState<VoucherDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -99,13 +105,14 @@ export default function VoucherDetailPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to approve voucher");
+        const data = await response.json();
+        throw new Error(data.error || "Failed to approve voucher");
       }
 
       const updatedVoucher = await response.json();
       setVoucher(updatedVoucher);
-    } catch (err) {
-      setError("Failed to approve voucher");
+    } catch (err: any) {
+      setError(err.message || "Failed to approve voucher");
       console.error(err);
     } finally {
       setIsApproving(false);
@@ -163,6 +170,7 @@ export default function VoucherDetailPage() {
             Details
           </h1>
         </div>
+
         <div className="flex gap-2">
           <Button
             onClick={handlePrint}
@@ -172,11 +180,14 @@ export default function VoucherDetailPage() {
             <Printer className="w-4 h-4" />
             Print
           </Button>
-          {voucher.status !== "APPROVED" && (
+
+          {/* Admin Actions: Approve/Reject */}
+          {userRole === "ADMIN" && (voucher.status === "SUBMITTED" || voucher.status === "DRAFT") && (
             <>
               <Button
                 onClick={() => handleApprove(false)}
                 variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
                 disabled={isApproving}
               >
                 Reject
@@ -193,10 +204,23 @@ export default function VoucherDetailPage() {
               </Button>
             </>
           )}
+
+          {/* Accountant Actions: Edit/Delete for Draft or Rejected */}
+          {userRole !== "ADMIN" &&
+            (voucher.status === "DRAFT" || voucher.status === "REJECTED") && (
+              <div className="flex gap-2">
+                <Link href={`/dashboard/vouchers/${voucher.id}/edit`}>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <Pencil className="w-4 h-4" />
+                    Edit
+                  </Button>
+                </Link>
+              </div>
+            )}
         </div>
       </div>
 
-      {/* Status Banner */}
+      {/* Status Banners */}
       {voucher.status === "APPROVED" && (
         <div className="flex gap-2 items-start bg-green-50 border border-green-200 rounded-lg p-4">
           <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -205,6 +229,42 @@ export default function VoucherDetailPage() {
             <p className="text-sm text-green-700">
               Approved on{" "}
               {new Date(voucher.approvedAt || "").toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {voucher.status === "REJECTED" && (
+        <div className="flex gap-2 items-start bg-red-50 border border-red-200 rounded-lg p-4">
+          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-red-800">Voucher Rejected</p>
+            <p className="text-sm text-red-700">
+              This voucher was rejected and needs revision.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {voucher.status === "SUBMITTED" && (
+        <div className="flex gap-2 items-start bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <Loader2 className="w-5 h-5 text-amber-600 mt-0.5 animate-spin flex-shrink-0" />
+          <div>
+            <p className="font-medium text-amber-800">Pending Approval</p>
+            <p className="text-sm text-amber-700">
+              This voucher has been submitted and is waiting for review.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {voucher.status === "DRAFT" && (
+        <div className="flex gap-2 items-start bg-slate-50 border border-slate-200 rounded-lg p-4">
+          <Clock className="w-5 h-5 text-slate-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-slate-800">Draft Voucher</p>
+            <p className="text-sm text-slate-700">
+              This voucher is currently in draft. Admins can review and approve it.
             </p>
           </div>
         </div>

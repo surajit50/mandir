@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Plus, AlertTriangle } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 interface InventoryItem {
   id: string;
@@ -18,6 +19,8 @@ interface InventoryItem {
 }
 
 export default function InventoryPage() {
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,12 +56,14 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-bold text-foreground">Inventory Management</h1>
           <p className="text-muted-foreground mt-1">Track temple assets and supplies</p>
         </div>
-        <Link href="/dashboard/inventory/new">
-          <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4" />
-            New Item
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/inventory/new">
+            <Button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4" />
+              New Item
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (

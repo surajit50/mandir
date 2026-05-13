@@ -3,10 +3,29 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Eye, TrendingUp, DollarSign, BookOpen } from "lucide-react";
+import {
+  Plus,
+  Eye,
+  TrendingUp,
+  DollarSign,
+  BookOpen,
+  Landmark,
+} from "lucide-react";
 import useSWR from "swr";
+import { useSession } from "next-auth/react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import { formatCurrency } from "@/lib/utils";
+import { toast } from "sonner";
+import { useEffect } from "react";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -23,29 +42,42 @@ interface BankAccount {
 }
 
 export default function BankAccountsPage() {
-  const { data: accounts, error, isLoading } = useSWR<BankAccount[]>(
-    "/api/bank-accounts",
-    fetcher
-  );
+  const {
+    data: accounts,
+    error,
+    isLoading,
+  } = useSWR<BankAccount[]>("/api/bank-accounts", fetcher);
+
+  useEffect(() => {
+    if (error) {
+      toast.error("Failed to load bank accounts");
+    }
+  }, [error]);
 
   // Compute totals safely
-  const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.currentBalance || 0), 0) || 0;
-  const totalOpeningBalance = accounts?.reduce((sum, acc) => sum + (acc.openingBalance || 0), 0) || 0;
+  const totalBalance =
+    accounts?.reduce((sum, acc) => sum + (acc.currentBalance || 0), 0) || 0;
+  const totalOpeningBalance =
+    accounts?.reduce((sum, acc) => sum + (acc.openingBalance || 0), 0) || 0;
+
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Bank Accounts</h1>
-          <p className="text-muted-foreground mt-2">Manage all temple trust bank accounts</p>
-        </div>
-        <Link href="/dashboard/bank-accounts/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4 mr-2" />
-            New Account
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Bank Accounts"
+        description="Manage all temple trust bank accounts"
+      >
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/bank-accounts/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New Account
+            </Button>
+          </Link>
+        )}
+      </PageHeader>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -58,7 +90,7 @@ export default function BankAccountsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-foreground">
-              ₹{totalOpeningBalance.toLocaleString()}
+              {formatCurrency(totalOpeningBalance)}
             </p>
           </CardContent>
         </Card>
@@ -72,7 +104,7 @@ export default function BankAccountsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-emerald-600">
-              ₹{totalBalance.toLocaleString()}
+              {formatCurrency(totalBalance)}
             </p>
           </CardContent>
         </Card>
@@ -80,19 +112,21 @@ export default function BankAccountsPage() {
 
       {/* Accounts List */}
       {isLoading ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Loading bank accounts...</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="h-24 bg-muted/50" />
+              <CardContent className="h-24" />
+            </Card>
+          ))}
         </div>
-      ) : error ? (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="pt-6">
-            <p className="text-destructive">Error loading bank accounts</p>
-          </CardContent>
-        </Card>
       ) : accounts && accounts.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {accounts.map((account) => (
-            <Card key={account.id} className="hover:shadow-lg transition-shadow">
+            <Card
+              key={account.id}
+              className="hover:shadow-lg transition-shadow"
+            >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -114,23 +148,31 @@ export default function BankAccountsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Holder</p>
-                    <p className="font-medium text-foreground">{account.accountHolder}</p>
+                    <p className="font-medium text-foreground">
+                      {account.accountHolder}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Type</p>
-                    <p className="font-medium text-foreground">{account.accountType}</p>
+                    <p className="font-medium text-foreground">
+                      {account.accountType}
+                    </p>
                   </div>
                 </div>
 
                 <div className="border-t border-border pt-4 grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">Opening Balance</p>
+                    <p className="text-xs text-muted-foreground">
+                      Opening Balance
+                    </p>
                     <p className="font-semibold text-foreground">
                       ₹{account.openingBalance.toLocaleString()}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Current Balance</p>
+                    <p className="text-xs text-muted-foreground">
+                      Current Balance
+                    </p>
                     <p className="font-semibold text-emerald-600">
                       ₹{account.currentBalance.toLocaleString()}
                     </p>
@@ -144,8 +186,14 @@ export default function BankAccountsPage() {
                       Details
                     </Button>
                   </Link>
-                  <Link href={`/dashboard/bank-accounts/${account.id}/passbook`}>
-                    <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                  <Link
+                    href={`/dashboard/bank-accounts/${account.id}/passbook`}
+                  >
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                    >
                       <BookOpen className="w-4 h-4 mr-2" />
                       Passbook
                     </Button>
@@ -156,14 +204,20 @@ export default function BankAccountsPage() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <p className="text-muted-foreground">No bank accounts found</p>
-            <Link href="/dashboard/bank-accounts/new">
-              <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">Create First Account</Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Landmark}
+          title="No bank accounts"
+          description="You haven't added any bank accounts to the temple trust yet."
+          action={
+            userRole !== "ADMIN"
+              ? {
+                  label: "Add Account",
+                  href: "/dashboard/bank-accounts/new",
+                  icon: Plus,
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

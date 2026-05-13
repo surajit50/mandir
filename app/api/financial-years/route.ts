@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
-
-const financialYearSchema = z.object({
-  yearCode: z.string(),
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime(),
-});
+import { FinancialYearSchema } from "@/lib/validations/accounting";
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,10 +29,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(years);
   } catch (error) {
     console.error("Get financial years error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch financial years" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch financial years" }, { status: 500 });
   }
 }
 
@@ -48,45 +39,47 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden – only Admins can create financial years" }, { status: 403 });
     }
 
     const body = await req.json();
-    const validated = financialYearSchema.parse(body);
+    const result = FinancialYearSchema.safeParse(body);
 
-    // Check if year code exists
-    const existing = await prisma.financialYear.findUnique({
-      where: { yearCode: validated.yearCode },
-    });
-
-    if (existing) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: "Financial year already exists" },
+        { error: "Validation failed", details: result.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
 
-    const startDate = new Date(validated.startDate);
-    const endDate = new Date(validated.endDate);
+    const { yearCode, startDate, endDate } = result.data;
+
+    const existing = await prisma.financialYear.findUnique({ where: { yearCode } });
+    if (existing) {
+      return NextResponse.json({ error: "Financial year code already exists" }, { status: 409 });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
     const year = await prisma.financialYear.create({
       data: {
-        yearCode: validated.yearCode,
-        startDate,
-        endDate,
+        yearCode,
+        startDate: start,
+        endDate: end,
         isCurrent: false,
         isLocked: false,
       },
       include: { periodConfigs: true },
     });
 
-    // Create monthly period configs
+    // Create 12 monthly period configs
     const monthNames = [
       "April", "May", "June", "July", "August", "September",
-      "October", "November", "December", "January", "February", "March"
+      "October", "November", "December", "January", "February", "March",
     ];
 
-    let currentDate = new Date(startDate);
+    let currentDate = new Date(start);
     for (let i = 0; i < 12; i++) {
       const periodStart = new Date(currentDate);
       const periodEnd = new Date(currentDate);
@@ -104,10 +97,9 @@ export async function POST(req: NextRequest) {
       });
 
       currentDate = new Date(periodEnd);
-      currentDate.setDate(1); // First day of next month
+      currentDate.setDate(1);
     }
 
-    // Log audit
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
@@ -125,9 +117,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(year, { status: 201 });
   } catch (error) {
     console.error("Create financial year error:", error);
-    return NextResponse.json(
-      { error: error instanceof z.ZodError ? error.errors : "Failed to create financial year" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Failed to create financial year" }, { status: 500 });
   }
 }

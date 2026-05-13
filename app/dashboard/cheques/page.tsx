@@ -19,6 +19,7 @@ import {
   Grid3X3,
   List,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 interface Cheque {
   id: string;
   chequeNumber: string;
+  chequeBookNumber: string | null;
   chequeDate: string;
   amount: number;
   payeeName: string;
@@ -64,6 +66,8 @@ interface BankAccount {
 }
 
 export default function ChequesPage() {
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
   const { data: cheques, error, isLoading } = useSWR<Cheque[]>(
     "/api/cheques",
     fetcher
@@ -164,12 +168,14 @@ export default function ChequesPage() {
               )}
               {groupByBank ? "List View" : "Bank View"}
             </Button>
-            <Link href="/dashboard/cheques/new">
-              <Button className="h-11 rounded-xl bg-white text-slate-900 hover:bg-slate-100">
-                <Plus className="mr-2 h-4 w-4" />
-                Add New Cheque
-              </Button>
-            </Link>
+            {userRole !== "ADMIN" && (
+              <Link href="/dashboard/cheques/new">
+                <Button className="h-11 rounded-xl bg-white text-slate-900 hover:bg-slate-100">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add New Cheque
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -363,6 +369,11 @@ export default function ChequesPage() {
                                 <p className="font-semibold text-slate-900">
                                   #{cheque.chequeNumber}
                                 </p>
+                                {cheque.chequeBookNumber && (
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    {cheque.chequeBookNumber}
+                                  </p>
+                                )}
                               </TableCell>
                               <TableCell>{cheque.payeeName}</TableCell>
                               <TableCell>

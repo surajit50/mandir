@@ -100,12 +100,14 @@ export default function BankDepositsPage() {
             Record and manage cash and cheque deposits
           </p>
         </div>
-        <Link href="/dashboard/bank-deposits/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4 mr-2" />
-            New Deposit
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/bank-deposits/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New Deposit
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Summary */}
@@ -240,11 +242,13 @@ export default function BankDepositsPage() {
         <Card>
           <CardContent className="pt-6 text-center">
             <p className="text-muted-foreground">No deposits found</p>
-            <Link href="/dashboard/bank-deposits/new">
-              <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
-                Create First Deposit
-              </Button>
-            </Link>
+            {userRole !== "ADMIN" && (
+              <Link href="/dashboard/bank-deposits/new">
+                <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
+                  Create First Deposit
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       )}

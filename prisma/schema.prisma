@@ -20,6 +20,7 @@ model User {
   name         String
   passwordHash String
   role         Role     @default(MEMBER)
+  userType     PayeeType @default(MEMBER)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -32,6 +33,7 @@ model User {
   documents   Document[]
 
   @@index([role])
+  @@index([userType])
 }
 
 model Payee {
@@ -47,8 +49,31 @@ model Payee {
 
   vouchers PaymentVoucher[]
 
+  payeeType PayeeType @default(OTHER)
+
   @@index([name])
   @@index([userId])
+  @@index([payeeType])
+}
+
+enum PayeeType {
+  PRESIDENT
+  SECRETARY
+  VICE_PRESIDENT
+  JOINT_SECRETARY
+  TREASURER
+  PRIEST
+  PUJARI
+  SEVAK
+  TRUSTEE
+  DEVOTEE
+  MANAGER
+  ARCHAKA
+  LABOUR
+  VENDOR
+  STAFF
+  MEMBER
+  OTHER
 }
 
 enum Role {
@@ -84,9 +109,10 @@ model DonationCollection {
   jewelleryAssets JewelleryAsset[]
 
   // Relations
-  donationItems DonationItem[]
-  cashBook      CashBook[]
-  receipt       DonationReceipt?
+  donationItems   DonationItem[]
+  cashBook        CashBook[]
+  receipt         DonationReceipt?
+  paymentVouchers PaymentVoucher[]
 
   @@index([collectorId])
   @@index([collectionDate])
@@ -220,7 +246,7 @@ model PaymentVoucher {
 
   // Jewellery details (for RECEIPT vouchers of jewellery donations)
   metalType String? // Gold, Silver
-  weight    Float?  // In Grams
+  weight    Float? // In Grams
   purity    String? // 22K, 24K, 925, etc.
 
   status     VoucherStatus @default(DRAFT)
@@ -234,6 +260,10 @@ model PaymentVoucher {
   bankAccountId String?      @db.ObjectId
   bankAccount   BankAccount? @relation("VoucherBankAccount", fields: [bankAccountId], references: [id])
 
+  // ----- CHEQUE LINK -----
+  chequeId String?         @db.ObjectId
+  cheque   ChequeRegister? @relation(fields: [chequeId], references: [id])
+
   // ----- BANK TRANSACTIONS (one-to-many) -----
   bankTransactions BankTransaction[]
 
@@ -241,7 +271,9 @@ model PaymentVoucher {
   updatedAt DateTime @updatedAt
 
   // Relations
-  cashBook CashBook[]
+  cashBook             CashBook[]
+  donationCollection   DonationCollection? @relation(fields: [donationCollectionId], references: [id])
+  donationCollectionId String?             @db.ObjectId
 
   @@index([voucherDate])
   @@index([status])
@@ -301,13 +333,13 @@ model CashBook {
 // ============================================
 model BankAccount {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  accountNumber  String   @unique     // ← ADD THIS UNIQUE
+  accountNumber  String   @unique // ← ADD THIS UNIQUE
   bankName       String
   branch         String?
   ifscCode       String?
   accountHolder  String
   accountType    String   @default("SAVINGS")
-  openingBalance Float    @default(0)  // ← ADD THIS
+  openingBalance Float    @default(0) // ← ADD THIS
   currentBalance Float    @default(0)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -316,7 +348,7 @@ model BankAccount {
   // relations (keep exactly as before)
   bankTransactions BankTransaction[]
   chequeRegisters  ChequeRegister[]
-  vouchers         PaymentVoucher[]         @relation("VoucherBankAccount")
+  vouchers         PaymentVoucher[]     @relation("VoucherBankAccount")
   deposits         BankDeposit[]
   reconciliations  BankReconciliation[]
 }
@@ -371,12 +403,13 @@ model ChequeRegister {
   accountId String      @db.ObjectId
   account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  chequeNumber String
-  chequeDate   DateTime
-  amount       Float
-  payeeName    String
-  payerName    String? // Name of the person who gave us the cheque (for RECEIVED cheques)
-  chequeType   ChequeType @default(ISSUED)
+  chequeNumber     String
+  chequeBookNumber String?
+  chequeDate       DateTime
+  amount           Float
+  payeeName        String
+  payerName        String? // Name of the person who gave us the cheque (for RECEIVED cheques)
+  chequeType       ChequeType @default(ISSUED)
 
   status       ChequeStatus @default(ISSUED)
   clearedDate  DateTime?
@@ -389,8 +422,9 @@ model ChequeRegister {
   financialYearId String?        @db.ObjectId
   financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  paymentVouchers PaymentVoucher[]
 
   @@unique([accountId, chequeNumber])
   @@index([accountId])
@@ -899,15 +933,15 @@ model MandirAsset {
 // ============================================
 
 model JewelleryAsset {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  jewelleryCode String   @unique
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  jewelleryCode String @unique
   jewelleryName String
-  metalType     String   // Gold, Silver
+  metalType     String // Gold, Silver
 
   description String?
-  purity      String?    // 22K, 24K, 925, etc.
-  weight      Float      @default(0)
-  quantity    Int        @default(1)
+  purity      String? // 22K, 24K, 925, etc.
+  weight      Float   @default(0)
+  quantity    Int     @default(1)
 
   estimatedValue Float     @default(0)
   receivedDate   DateTime?
@@ -929,14 +963,14 @@ model JewelleryAsset {
 // ============================================
 
 model BankTransaction {
-  id              String    @id @default(auto()) @map("_id") @db.ObjectId
-  bankAccountId   String    @db.ObjectId
-  bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id])
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  bankAccountId   String          @db.ObjectId
+  bankAccount     BankAccount     @relation(fields: [bankAccountId], references: [id])
   amount          Float
-  type            String    // "CREDIT" or "DEBIT"
+  type            String // "CREDIT" or "DEBIT"
   description     String?
-  voucherId       String?   @db.ObjectId
+  voucherId       String?         @db.ObjectId
   paymentVoucher  PaymentVoucher? @relation(fields: [voucherId], references: [id])
-  transactionDate DateTime  @default(now())
-  createdAt       DateTime  @default(now())
+  transactionDate DateTime        @default(now())
+  createdAt       DateTime        @default(now())
 }

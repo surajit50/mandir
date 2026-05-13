@@ -1,109 +1,163 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { id: accountId } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const accountId = id;
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
-    // Fetch VERIFIED bank deposits for this account (skip PENDING/REJECTED)
+    const dateFilter = {
+      gte: startDate ? new Date(startDate) : undefined,
+      lte: endDate ? new Date(endDate) : undefined,
+    };
+
+    // ── Fetch the bank account ────────────────────────────────────────
+    const account = await prisma.bankAccount.findUnique({
+      where: { id: accountId },
+      select: {
+        id: true,
+        bankName: true,
+        accountNumber: true,
+        accountHolder: true,
+        accountType: true,
+        openingBalance: true,
+        currentBalance: true,
+        branch: true,
+        ifscCode: true,
+      },
+    });
+
+    if (!account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    // ── Source 1: BankTransaction records (from approved vouchers) ────
+    const bankTransactions = await prisma.bankTransaction.findMany({
+      where: {
+        bankAccountId: accountId,
+        ...(startDate || endDate ? { transactionDate: dateFilter } : {}),
+      },
+      include: {
+        paymentVoucher: { select: { voucherNumber: true, id: true } },
+      },
+      orderBy: { transactionDate: "asc" },
+    });
+
+    // ── Source 2: Verified bank deposits ─────────────────────────────
     const deposits = await prisma.bankDeposit.findMany({
       where: {
         accountId,
         status: "VERIFIED",
-        depositDate: {
-          gte: startDate ? new Date(startDate) : undefined,
-          lte: endDate ? new Date(endDate) : undefined,
-        },
+        ...(startDate || endDate ? { depositDate: dateFilter } : {}),
       },
       orderBy: { depositDate: "asc" },
     });
 
-    // Fetch cleared cheques for this account (debits — money out)
-    // Skip placeholder/unassigned cheque leaves
-    const cheques = await prisma.chequeRegister.findMany({
+    // ── Source 3: Cleared cheques ─────────────────────────────────────
+    const clearedCheques = await prisma.chequeRegister.findMany({
       where: {
         accountId,
         status: "CLEARED",
-        clearedDate: {
-          gte: startDate ? new Date(startDate) : undefined,
-          lte: endDate ? new Date(endDate) : undefined,
-        },
+        amount: { gt: 0 },
+        ...(startDate || endDate
+          ? { clearedDate: dateFilter }
+          : {}),
       },
-      orderBy: { chequeDate: "asc" },
+      orderBy: { clearedDate: "asc" },
     });
 
-    // Get deposit IDs that are linked to cleared cheques (encashment deposits)
-    // These were created by the encash API and should NOT be shown as separate deposits
+    // Deposit IDs tied to cheque encashments – skip them (avoid double-counting)
     const encashmentDepositIds = new Set(
-      cheques.filter((c) => c.depositId).map((c) => c.depositId!)
+      clearedCheques.filter((c) => c.depositId).map((c) => c.depositId!)
     );
 
-    // Filter out encashment-generated deposits — only show real deposits (money in)
-    // Then combine with cleared cheques (money out) for the passbook
-    const transactions = [
-      ...deposits
-        .filter((d) => !encashmentDepositIds.has(d.id))
-        .map((d) => ({
-          id: `dep-${d.id}`,
-          date: d.depositDate,
-          description: d.remarks || "Bank Deposit",
-          creditAmount: d.totalAmount,
-          debitAmount: 0,
-          referenceType: "BANK_DEPOSIT",
-        })),
-      ...cheques
-        .filter((c) => c.amount > 0)
-        .map((c) => {
-          const isReceived = (c as any).chequeType === "RECEIVED";
-          return {
-            id: `chq-${c.id}`,
-            date: c.clearedDate!,
-            description: isReceived 
-              ? `Cheque #${c.chequeNumber} from ${(c as any).payerName || "Unknown"}`
-              : `Cheque #${c.chequeNumber} to ${c.payeeName}`,
-            chequeNumber: c.chequeNumber,
-            creditAmount: isReceived ? c.amount : 0,
-            debitAmount: isReceived ? 0 : c.amount,
-            referenceType: "CHEQUE" as const,
-          };
-        }),
-    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Voucher IDs already covered by BankTransaction – skip duplicate deposits
+    const coveredVoucherIds = new Set(
+      bankTransactions
+        .filter((bt) => bt.paymentVoucher)
+        .map((bt) => bt.paymentVoucher!.id)
+    );
 
-    // Calculate running balance
-    const account = await prisma.bankAccount.findUnique({
-      where: { id: accountId },
+    // ── Merge all sources into a unified list ─────────────────────────
+    type TxRow = {
+      id: string;
+      date: Date;
+      description: string;
+      creditAmount: number;
+      debitAmount: number;
+      referenceType: string;
+      voucherNumber?: string;
+    };
+
+    const rows: TxRow[] = [];
+
+    // BankTransaction (primary source – approved vouchers)
+    for (const bt of bankTransactions) {
+      rows.push({
+        id: `bt-${bt.id}`,
+        date: bt.transactionDate,
+        description: bt.description || "Bank Transaction",
+        creditAmount: bt.type === "CREDIT" ? bt.amount : 0,
+        debitAmount: bt.type === "DEBIT" ? bt.amount : 0,
+        referenceType: "VOUCHER",
+        voucherNumber: bt.paymentVoucher?.voucherNumber,
+      });
+    }
+
+    // Verified deposits not from encashments and not already covered by a BankTransaction
+    for (const d of deposits) {
+      if (encashmentDepositIds.has(d.id)) continue;
+      rows.push({
+        id: `dep-${d.id}`,
+        date: d.depositDate,
+        description: d.remarks || `Bank Deposit – ${d.depositNumber}`,
+        creditAmount: d.totalAmount,
+        debitAmount: 0,
+        referenceType: "BANK_DEPOSIT",
+      });
+    }
+
+    // Cleared cheques
+    for (const c of clearedCheques) {
+      const isReceived = (c as any).chequeType === "RECEIVED";
+      rows.push({
+        id: `chq-${c.id}`,
+        date: c.clearedDate!,
+        description: isReceived
+          ? `Cheque #${c.chequeNumber} received from ${(c as any).payerName || "Unknown"}`
+          : `Cheque #${c.chequeNumber} issued to ${c.payeeName}`,
+        creditAmount: isReceived ? c.amount : 0,
+        debitAmount: isReceived ? 0 : c.amount,
+        referenceType: "CHEQUE",
+      });
+    }
+
+    // Sort by date ascending
+    rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Compute running balance
+    let runningBalance = account.openingBalance;
+    const transactions = rows.map((row) => {
+      runningBalance += row.creditAmount - row.debitAmount;
+      return { ...row, balance: runningBalance };
     });
 
-    let runningBalance = account?.openingBalance || 0;
-    const passbook = transactions.map((tx) => ({
-      ...tx,
-      balance: (runningBalance += tx.creditAmount - tx.debitAmount),
-    }));
-
-    return NextResponse.json(passbook);
+    return NextResponse.json({ account, transactions });
   } catch (error) {
     console.error("Error fetching passbook:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch passbook" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch passbook" }, { status: 500 });
   }
 }

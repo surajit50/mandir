@@ -1,30 +1,22 @@
 // app/api/vouchers/route.ts
+/**
+ * VOUCHER CREATION RULES
+ * ──────────────────────
+ * • Voucher is created as DRAFT – NO balance changes, NO bank debits/credits.
+ * • GL posting happens ONLY on APPROVE (in the /approve endpoint).
+ * • Balance guards (negative balance prevention) also run on APPROVE.
+ * • Exception: INSTANT_POST_RECEIPT_CATEGORIES receipts are auto-APPROVED
+ *   immediately on creation (bank interest, online received, etc.) because
+ *   they are already confirmed by the bank and need no further verification.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { PaymentVoucherSchema } from "@/lib/validations/accounting";
 
-const PaymentVoucherSchema = z.object({
-  voucherDate: z.string().datetime(),
-  payeeId: z.string().optional(),
-  payeeName: z.string().optional(),
-  payeeEmail: z.string().email().optional().or(z.literal("")),
-  amount: z.number().positive("Amount must be greater than 0"),
-  description: z.string().min(1, "Description is required"),
-  paymentMethod: z.enum(["CASH", "CHEQUE", "BANK_TRANSFER", "ONLINE"]),
-  voucherType: z.enum(["PAYMENT", "RECEIPT"]),
-  chequeId: z.string().optional(),
-  bankAccountId: z.string().optional(),
-  category: z.string().optional(),
-  referenceNumber: z.string().optional(),
-  referenceDate: z.string().datetime().optional().or(z.literal("")),
-  metalType: z.string().optional(),
-  weight: z.number().optional(),
-  purity: z.string().optional(),
-});
-
-// Categories that should instantly credit the bank account and be marked as APPROVED
+// These receipt categories are instant-post: already confirmed by the bank.
 const INSTANT_POST_RECEIPT_CATEGORIES = [
   "DIRECT_DEPOSIT",
   "BANK_INTEREST",
@@ -32,11 +24,8 @@ const INSTANT_POST_RECEIPT_CATEGORIES = [
   "ONLINE_RECEIVED",
 ];
 
-// Generate voucher number
 async function generateVoucherNumber(type: "PAYMENT" | "RECEIPT"): Promise<string> {
-  const count = await prisma.paymentVoucher.count({
-    where: { voucherType: type }
-  });
+  const count = await prisma.paymentVoucher.count({ where: { voucherType: type } });
   const year = new Date().getFullYear();
   const prefix = type === "PAYMENT" ? "PV" : "RV";
   return `${prefix}-${year}-${String(count + 1).padStart(5, "0")}`;
@@ -45,65 +34,63 @@ async function generateVoucherNumber(type: "PAYMENT" | "RECEIPT"): Promise<strin
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userRole = (session.user as any).role;
-
-    // Only ADMIN and ACCOUNTANT can create vouchers
     if (!["ADMIN", "ACCOUNTANT"].includes(userRole)) {
       return NextResponse.json(
-        { error: "Forbidden - Only admins and accountants can create vouchers" },
+        { error: "Forbidden – only Admins and Accountants can create vouchers" },
         { status: 403 }
       );
     }
 
     const body = await request.json();
-    const validatedData = PaymentVoucherSchema.parse(body);
+    const result = PaymentVoucherSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: result.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const data = result.data;
 
-    const trimmedPayeeName = validatedData.payeeName?.trim();
-    if (!validatedData.payeeId && !trimmedPayeeName) {
+    const trimmedPayeeName = data.payeeName?.trim();
+    if (!data.payeeId && !trimmedPayeeName) {
       return NextResponse.json({ error: "Payee is required" }, { status: 400 });
     }
 
-    let payee = validatedData.payeeId
+    // ── Resolve or create payee ───────────────────────────────────────────
+    let payee = data.payeeId
       ? await prisma.payee.findUnique({
-          where: { id: validatedData.payeeId },
-          select: { id: true, name: true, email: true, userId: true },
+          where: { id: data.payeeId },
+          select: { id: true, name: true, email: true, userId: true, payeeType: true },
         })
       : null;
-
+ 
     if (!payee && trimmedPayeeName) {
-      const normalizedEmail = validatedData.payeeEmail || null;
       payee = await prisma.payee.findFirst({
-        where: {
-          name: trimmedPayeeName,
-          email: normalizedEmail,
-        },
-        select: { id: true, name: true, email: true, userId: true },
+        where: { name: trimmedPayeeName, email: data.payeeEmail || null },
+        select: { id: true, name: true, email: true, userId: true, payeeType: true },
       });
-
+ 
       if (!payee) {
-        const linkedUser = normalizedEmail
+        const linkedUser = data.payeeEmail
           ? await prisma.user.findUnique({
-              where: { email: normalizedEmail },
+              where: { email: data.payeeEmail },
               select: { id: true },
             })
           : null;
-
         payee = await prisma.payee.create({
-          data: {
-            name: trimmedPayeeName,
-            email: normalizedEmail,
-            userId: linkedUser?.id || null,
-            isActive: true,
+          data: { 
+            name: trimmedPayeeName, 
+            email: data.payeeEmail || null, 
+            userId: linkedUser?.id || null, 
+            payeeType: data.payeeType || "OTHER",
+            isActive: true 
           },
-          select: { id: true, name: true, email: true, userId: true },
+          select: { id: true, name: true, email: true, userId: true, payeeType: true },
         });
       }
     }
@@ -112,172 +99,129 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payee not found" }, { status: 400 });
     }
 
-    let selectedCheque: {
-      id: string;
-      chequeNumber: string;
-      amount: number;
-      payeeName: string;
-    } | null = null;
+    // ── Cheque validation (PAYMENT + CHEQUE method) ───────────────────────
+    let selectedCheque: { id: string; chequeNumber: string; amount: number; payeeName: string } | null = null;
 
-    if (
-      validatedData.voucherType === "PAYMENT" &&
-      validatedData.paymentMethod === "CHEQUE"
-    ) {
-      if (!validatedData.chequeId) {
-        return NextResponse.json(
-          { error: "Please select a cheque from cheque register" },
-          { status: 400 }
-        );
+    if (data.voucherType === "PAYMENT" && data.paymentMethod === "CHEQUE") {
+      if (!data.chequeId) {
+        return NextResponse.json({ error: "Please select a cheque from the cheque register" }, { status: 400 });
       }
-
       selectedCheque = await prisma.chequeRegister.findFirst({
-        where: {
-          id: validatedData.chequeId,
-          status: "ISSUED",
-        },
-        select: {
-          id: true,
-          chequeNumber: true,
-          amount: true,
-          payeeName: true,
-        },
+        where: { id: data.chequeId, status: "ISSUED" },
+        select: { id: true, chequeNumber: true, amount: true, payeeName: true },
       });
-
       if (!selectedCheque) {
-        return NextResponse.json(
-          { error: "Selected cheque is invalid or no longer available" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Selected cheque is invalid or no longer available" }, { status: 400 });
       }
-
-      const isUnassignedCheque =
-        selectedCheque.payeeName === "UNASSIGNED" && selectedCheque.amount === 0;
-
-      if (!isUnassignedCheque && selectedCheque.amount !== validatedData.amount) {
-        return NextResponse.json(
-          { error: "Voucher amount must match selected cheque amount" },
-          { status: 400 }
-        );
+      const isUnassigned = selectedCheque.payeeName === "UNASSIGNED" && selectedCheque.amount === 0;
+      if (!isUnassigned && selectedCheque.amount !== data.amount) {
+        return NextResponse.json({ error: "Voucher amount must match cheque amount" }, { status: 400 });
       }
     }
 
-    const voucherNumber = await generateVoucherNumber(validatedData.voucherType);
+    // ── Bank account pre-check for PAYMENT vouchers ───────────────────────
+    // We only guard here for instant-APPROVED receipts (credit side is fine).
+    // Full guard for PAYMENT vouchers runs at APPROVE time.
 
-    // Get current financial year
-    const currentFY = await prisma.financialYear.findFirst({
-      where: { isCurrent: true },
-    });
+    const voucherNumber = await generateVoucherNumber(data.voucherType);
+    const currentFY = await prisma.financialYear.findFirst({ where: { isCurrent: true } });
+
+    const isInstantReceipt =
+      data.voucherType === "RECEIPT" &&
+      data.bankAccountId &&
+      INSTANT_POST_RECEIPT_CATEGORIES.includes(data.category ?? "");
 
     const voucher = await prisma.$transaction(async (tx) => {
+      // 1. Create the voucher (always starts as DRAFT unless instant-receipt)
       const v = await tx.paymentVoucher.create({
         data: {
           voucherNumber,
-          voucherDate: new Date(validatedData.voucherDate),
-          voucherType: validatedData.voucherType,
+          voucherDate: new Date(data.voucherDate),
+          voucherType: data.voucherType,
           payeeId: payee!.id,
-          amount: validatedData.amount,
+          amount: data.amount,
           description:
-            validatedData.paymentMethod === "CHEQUE" && selectedCheque
-              ? `${validatedData.description} (Cheque #${selectedCheque.chequeNumber})`
-              : validatedData.description,
-          paymentMethod: validatedData.paymentMethod,
-          category: validatedData.category,
-          referenceNumber: validatedData.referenceNumber,
-          referenceDate: validatedData.referenceDate
-            ? new Date(validatedData.referenceDate)
-            : undefined,
-          metalType: validatedData.metalType,
-          weight: validatedData.weight,
-          purity: validatedData.purity,
+            data.paymentMethod === "CHEQUE" && selectedCheque
+              ? `${data.description} (Cheque #${selectedCheque.chequeNumber})`
+              : data.description,
+          paymentMethod: data.paymentMethod,
+          bankAccountId: data.bankAccountId || null,
+          chequeId: data.chequeId || null,
+          category: data.category,
+          referenceNumber: data.referenceNumber,
+          referenceDate: data.referenceDate ? new Date(data.referenceDate) : undefined,
+          metalType: data.metalType,
+          weight: data.weight,
+          purity: data.purity,
           status: "DRAFT",
           financialYearId: currentFY?.id,
         },
-        include: {
-          payee: { select: { id: true, name: true, email: true } },
-        },
+        include: { payee: { select: { id: true, name: true, email: true } } },
       });
 
-      // ===== NEW: Auto‑post eligible receipts to the bank passbook =====
-      const shouldPostToBank =
-        validatedData.voucherType === "RECEIPT" &&
-        validatedData.bankAccountId &&
-        INSTANT_POST_RECEIPT_CATEGORIES.includes(validatedData.category ?? "");
-
-      if (shouldPostToBank) {
-        // 1. Create a credit transaction in the bank account
-        await tx.bankTransaction.create({
-          data: {
-            bankAccountId: validatedData.bankAccountId!,
-            amount: validatedData.amount,
-            type: "CREDIT",
-            description: `${v.voucherNumber} - ${validatedData.description}`,
-            voucherId: v.id,
-            transactionDate: new Date(validatedData.voucherDate),
-          },
-        });
-
-        // 2. Update the bank account's current balance
-        await tx.bankAccount.update({
-          where: { id: validatedData.bankAccountId! },
-          data: {
-            currentBalance: {
-              increment: validatedData.amount,
-            },
-          },
-        });
-
-        // 3. Mark the voucher as APPROVED instead of DRAFT
-        await tx.paymentVoucher.update({
-          where: { id: v.id },
-          data: { status: "APPROVED" },
-        });
-
-        // Re‑fetch the voucher so the response includes the updated status
-        const updatedVoucher = await tx.paymentVoucher.findUnique({
-          where: { id: v.id },
-          include: { payee: { select: { id: true, name: true, email: true } } },
-        });
-        if (updatedVoucher) {
-          v.status = updatedVoucher.status;
-          // Optionally merge other fields if needed, but status is the only change
-        }
-      }
-      // ===== End auto‑post block =====
-
-      if (validatedData.voucherType === "RECEIPT" && validatedData.paymentMethod === "CHEQUE" && validatedData.referenceNumber) {
-        if (validatedData.bankAccountId) {
-          await tx.chequeRegister.create({
-            data: {
-              chequeNumber: validatedData.referenceNumber,
-              chequeDate: validatedData.referenceDate ? new Date(validatedData.referenceDate) : new Date(validatedData.voucherDate),
-              amount: validatedData.amount,
-              payeeName: "Temple Trust",
-              payerName: payee!.name,
-              chequeType: "RECEIVED",
-              status: "DEPOSITED",
-              accountId: validatedData.bankAccountId,
-              financialYearId: currentFY?.id,
-            },
-          });
-        }
-      }
-
+      // 2. Update unassigned cheque leaf details (no balance change yet)
       if (selectedCheque) {
         await tx.chequeRegister.update({
           where: { id: selectedCheque.id },
+          data: { amount: data.amount, payeeName: payee!.name },
+        });
+      }
+
+      // 3. Register received cheque in cheque register (RECEIPT + CHEQUE)
+      if (data.voucherType === "RECEIPT" && data.paymentMethod === "CHEQUE" && data.referenceNumber && data.bankAccountId) {
+        await tx.chequeRegister.create({
           data: {
-            amount: validatedData.amount,
-            payeeName: payee!.name,
+            chequeNumber: data.referenceNumber,
+            chequeDate: data.referenceDate ? new Date(data.referenceDate) : new Date(data.voucherDate),
+            amount: data.amount,
+            payeeName: "Temple Trust",
+            payerName: payee!.name,
+            chequeType: "RECEIVED",
+            status: "DEPOSITED",
+            accountId: data.bankAccountId,
+            financialYearId: currentFY?.id,
           },
         });
       }
 
-      // Log audit
+      // 4. Instant-post for pre-confirmed bank receipts
+      if (isInstantReceipt) {
+        await tx.bankTransaction.create({
+          data: {
+            bankAccountId: data.bankAccountId!,
+            amount: data.amount,
+            type: "CREDIT",
+            description: `${v.voucherNumber} – ${data.description}`,
+            voucherId: v.id,
+            transactionDate: new Date(data.voucherDate),
+          },
+        });
+        await tx.bankAccount.update({
+          where: { id: data.bankAccountId! },
+          data: { currentBalance: { increment: data.amount } },
+        });
+        await tx.cashBook.create({
+          data: {
+            date: new Date(data.voucherDate),
+            description: `RECEIPT – ${payee!.name} – ${data.description}`,
+            creditAmount: data.amount,
+            debitAmount: 0,
+            balance: 0,
+            referenceType: "PaymentVoucher",
+            referenceId: v.id,
+            paymentVoucherId: v.id,
+            financialYearId: currentFY?.id,
+          },
+        });
+        await tx.paymentVoucher.update({ where: { id: v.id }, data: { status: "APPROVED", approvedAt: new Date() } });
+      }
+
+      // 5. Audit log
       await tx.auditLog.create({
         data: {
           userId: (session.user as any).id,
           userName: session.user.name ?? "Unknown User",
-          userRole: userRole,
+          userRole,
           action: "CREATE",
           module: "PaymentVoucher",
           entityId: v.id,
@@ -286,48 +230,45 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return v;
+      return tx.paymentVoucher.findUnique({
+        where: { id: v.id },
+        include: { payee: { select: { id: true, name: true, email: true } } },
+      });
     });
 
     return NextResponse.json(voucher, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation error", details: error.errors },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Validation error", details: error.errors }, { status: 400 });
     }
-
     console.error("Voucher creation error:", error);
-    return NextResponse.json(
-      { error: "Failed to create payment voucher" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create payment voucher" }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userRole = (session.user as any).role;
     const userId = (session.user as any).id;
 
-    // Filter based on role
-    const where =
-      userRole === "MEMBER" ? { payee: { userId } } : {};
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+    const voucherType = searchParams.get("voucherType");
+
+    const where: any = userRole === "MEMBER" ? { payee: { userId } } : {};
+    if (status) where.status = status;
+    if (voucherType) where.voucherType = voucherType;
 
     const vouchers = await prisma.paymentVoucher.findMany({
       where,
       include: {
         payee: { select: { id: true, name: true, email: true } },
+        bankAccount: { select: { id: true, bankName: true, accountNumber: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -335,9 +276,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(vouchers);
   } catch (error) {
     console.error("Voucher fetch error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch vouchers" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch vouchers" }, { status: 500 });
   }
 }

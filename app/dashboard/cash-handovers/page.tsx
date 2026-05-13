@@ -156,12 +156,14 @@ export default function CashHandoversPage() {
           </p>
         </div>
 
-        <Link href="/dashboard/cash-handovers/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            New Handover
-          </Button>
-        </Link>
+        {userRole !== "ADMIN" && (
+          <Link href="/dashboard/cash-handovers/new">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
+              New Handover
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Balance Summary */}
@@ -391,11 +393,13 @@ export default function CashHandoversPage() {
           <CardContent className="py-16 text-center">
             <p className="text-muted-foreground">No cash handovers found</p>
 
-            <Link href="/dashboard/cash-handovers/new">
-              <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
-                Create First Handover
-              </Button>
-            </Link>
+            {userRole !== "ADMIN" && (
+              <Link href="/dashboard/cash-handovers/new">
+                <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
+                  Create First Handover
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       )}

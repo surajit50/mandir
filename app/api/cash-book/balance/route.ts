@@ -16,8 +16,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // CashBook summary excluding handovers (to avoid legacy wrong handover rows).
-    const [cashBookSummary, approvedHandovers] = await Promise.all([
+    const [cashBookSummary, approvedHandovers, pendingVouchers] = await Promise.all([
       prisma.cashBook.aggregate({
         where: {
           referenceType: {
@@ -37,6 +36,16 @@ export async function GET(request: NextRequest) {
           totalAmount: true,
         },
       }),
+      prisma.paymentVoucher.aggregate({
+        where: {
+          status: "DRAFT",
+          voucherType: "PAYMENT",
+          paymentMethod: "CASH",
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
     ]);
 
     const cashBookReceipts = cashBookSummary._sum.creditAmount || 0;
@@ -44,6 +53,8 @@ export async function GET(request: NextRequest) {
     const handoverCashIn = approvedHandovers._sum.totalAmount || 0;
     const totalReceipts = cashBookReceipts + handoverCashIn;
     const totalPayments = cashBookPayments;
+    const pendingPayments = pendingVouchers._sum.amount || 0;
+
     // Prevent tiny/legacy negative drift from blocking cash deposits in UI.
     const rawBalance = totalReceipts - totalPayments;
     const balance = rawBalance < 0 ? 0 : rawBalance;
@@ -54,6 +65,8 @@ export async function GET(request: NextRequest) {
       totalPayments,
       rawBalance,
       handoverCashIn,
+      pendingPayments,
+      potentialBalance: balance - pendingPayments,
     });
   } catch (error) {
     console.error("Cash balance fetch error:", error);

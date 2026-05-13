@@ -6,6 +6,7 @@ import { z } from "zod";
 
 const ChequeSchema = z.object({
   chequeNumber: z.string().min(1, "Cheque number is required"),
+  chequeBookNumber: z.string().optional(),
   chequeDate: z.string().datetime(),
   amount: z.number().positive("Amount must be greater than 0"),
   payeeName: z.string().min(1, "Payee name is required"),
@@ -15,6 +16,7 @@ const ChequeSchema = z.object({
 
 const ChequeBookSchema = z.object({
   accountId: z.string().min(1, "Account is required"),
+  chequeBookNumber: z.string().optional(),
   startChequeNumber: z.string().regex(/^\d+$/, "Start cheque number must be numeric"),
   leafCount: z.number().int().min(20, "Cheque book must have at least 20 leaves"),
   chequeDate: z.string().datetime().optional(),
@@ -83,6 +85,7 @@ export async function POST(request: NextRequest) {
         await tx.chequeRegister.createMany({
           data: chequeNumbers.map((chequeNumber) => ({
             chequeNumber,
+            chequeBookNumber: validatedBook.chequeBookNumber || null,
             chequeDate,
             amount: 0,
             payeeName: "UNASSIGNED",
@@ -152,6 +155,7 @@ export async function POST(request: NextRequest) {
     const cheque = await prisma.chequeRegister.create({
       data: {
         chequeNumber: validatedData.chequeNumber,
+        chequeBookNumber: validatedData.chequeBookNumber || null,
         chequeDate: new Date(validatedData.chequeDate),
         amount: validatedData.amount,
         payeeName: validatedData.payeeName,
@@ -211,7 +215,15 @@ export async function GET(request: NextRequest) {
 
     const cheques = await prisma.chequeRegister.findMany({
       where: includeUnassigned
-        ? undefined
+        ? {
+            // If we want unassigned ones for vouchers, they must not be already linked
+            // to a DRAFT or APPROVED voucher.
+            paymentVouchers: {
+              none: {
+                status: { in: ["DRAFT", "SUBMITTED", "APPROVED"] },
+              },
+            },
+          }
         : {
             // Exclude placeholder cheque leaves (blank/unused)
             // Real cheques have a proper payee name AND amount > ₹0

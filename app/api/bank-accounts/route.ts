@@ -5,13 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
-const BankAccountSchema = z.object({
-  accountNumber: z.string().min(1, "Account number is required"),
-  bankName: z.string().min(1, "Bank name is required"),
-  accountHolder: z.string().min(1, "Account holder is required"),
-  accountType: z.string().min(1, "Account type is required"),
-  openingBalance: z.number().default(0),
-});
+import { BankAccountSchema } from "@/lib/validations/accounting";
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,6 +38,8 @@ export async function POST(request: NextRequest) {
       data: {
         accountNumber: validatedData.accountNumber,
         bankName: validatedData.bankName,
+        branch: validatedData.branch || null,
+        ifscCode: validatedData.ifscCode || null,
         accountHolder: validatedData.accountHolder,
         accountType: validatedData.accountType,
         openingBalance: validatedData.openingBalance,
@@ -93,9 +89,29 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    console.log("Bank accounts fetched:", bankAccounts.length);
+    const enrichedAccounts = await Promise.all(
+      bankAccounts.map(async (account) => {
+        const pendingVouchers = await prisma.paymentVoucher.aggregate({
+          where: {
+            bankAccountId: account.id,
+            status: "DRAFT",
+            voucherType: "PAYMENT",
+          },
+          _sum: {
+            amount: true,
+          },
+        });
 
-    return NextResponse.json(bankAccounts);
+        const pendingPayments = pendingVouchers._sum.amount || 0;
+        return {
+          ...account,
+          pendingPayments,
+          potentialBalance: account.currentBalance - pendingPayments,
+        };
+      })
+    );
+
+    return NextResponse.json(enrichedAccounts);
   } catch (error) {
     console.error("Bank accounts fetch error:", error);
     return NextResponse.json(
