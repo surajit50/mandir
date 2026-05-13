@@ -67,7 +67,6 @@ const PAYMENT_CATEGORIES = [
   { value: "OTHER_EXPENSE", label: "Other Expense" },
 ];
 
-// Categories that must auto‑post – used to enforce bank account selection
 const INSTANT_POST_CATEGORIES = [
   "DIRECT_DEPOSIT",
   "BANK_INTEREST",
@@ -129,11 +128,50 @@ export default function NewVoucherPage() {
     fetcher,
   );
 
-  // Derived boolean: does this receipt require a bank account (i.e., will it auto‑post)?
+  // Determine the forced payment method based on category (null = user choice)
+  const autoPaymentMethod = (() => {
+    if (voucherType !== "RECEIPT") return null; // only for receipts
+    if (category === "JEWELLERY_DONATION") return "CASH"; // placeholder, not shown
+    if (category === "BANK_INTEREST") return "BANK_TRANSFER";
+    if (category === "DIRECT_DEPOSIT") return "BANK_TRANSFER";
+    if (category === "BANK_TRANSFER_RECEIVED") return "BANK_TRANSFER";
+    if (category === "ONLINE_RECEIVED") return "ONLINE";
+    if (category === "CHEQUE_RECEIVED") return "CHEQUE";
+    return null; // DONATION, RENT_INCOME, OTHER_INCOME – free choice
+  })();
+
+  // Derived booleans for showing/hiding sections
+  const isJewelleryDonation =
+    voucherType === "RECEIPT" && category === "JEWELLERY_DONATION";
+  const showPaymentMethod = !isJewelleryDonation; // hide for jewellery
   const requiresBankAccount =
     voucherType === "RECEIPT" && INSTANT_POST_CATEGORIES.includes(category);
 
-  // Update available balance based on payment method and bank account
+  // Auto‑set payment method when category changes
+  useEffect(() => {
+    if (autoPaymentMethod) {
+      setPaymentMethod(autoPaymentMethod);
+    }
+  }, [autoPaymentMethod]);
+
+  // Reset fields that don't apply when category changes
+  useEffect(() => {
+    if (isJewelleryDonation) {
+      // Clear bank/cheque related fields
+      setBankAccountId("");
+      setChequeId("");
+      setReferenceNumber("");
+      setReferenceDate("");
+      setReceivedChequeBank("");
+      setPaymentMethod("CASH"); // placeholder
+    }
+    if (voucherType === "RECEIPT" && category === "CHEQUE_RECEIVED") {
+      // Ensure cheque fields are visible and bank account is cleared (cheque has its own)
+      setBankAccountId("");
+    }
+  }, [isJewelleryDonation, category, voucherType]);
+
+  // Update available balance logic (unchanged)
   useEffect(() => {
     if (voucherType === "RECEIPT") {
       setAvailableBalance(null);
@@ -144,8 +182,6 @@ export default function NewVoucherPage() {
       setAvailableBalance(cashBalanceData?.balance ?? null);
     } else if (bankAccountId) {
       const selectedAccount = bankAccounts?.find((a) => a.id === bankAccountId);
-      // In a real app, we might want to fetch the latest balance from the API
-      // but for now we use the currentBalance from the bankAccounts list
       const accountWithBalance = selectedAccount as any;
       setAvailableBalance(accountWithBalance?.currentBalance ?? 0);
     } else {
@@ -171,6 +207,7 @@ export default function NewVoucherPage() {
         return numA - numB;
       }) ?? [];
 
+  // Side effects when method/voucher type change
   useEffect(() => {
     if (!(voucherType === "PAYMENT" && paymentMethod === "CHEQUE")) {
       setChequeId("");
@@ -219,7 +256,6 @@ export default function NewVoucherPage() {
       return;
     }
 
-    // NEW: enforce bank account for auto‑post categories
     if (requiresBankAccount && !bankAccountId) {
       toast.error("Bank account is required for this receipt type");
       return;
@@ -270,7 +306,7 @@ export default function NewVoucherPage() {
           payeeEmail: payeeEmail.trim() || undefined,
           amount: parseFloat(amount),
           description: finalDescription,
-          paymentMethod,
+          paymentMethod: isJewelleryDonation ? "CASH" : paymentMethod, // always CASH for jewellery
           chequeId: chequeId || undefined,
           bankAccountId: bankAccountId || undefined,
           category: category || undefined,
@@ -321,8 +357,12 @@ export default function NewVoucherPage() {
             <CardDescription>Fill in the voucher information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Row 1: Type, Date, Payment Method */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* Row 1: Type, Date, Payment Method (dynamic columns) */}
+            <div
+              className={`grid ${
+                showPaymentMethod ? "grid-cols-3" : "grid-cols-2"
+              } gap-4`}
+            >
               <div>
                 <label
                   htmlFor="type"
@@ -361,29 +401,56 @@ export default function NewVoucherPage() {
                 />
               </div>
 
-              <div>
-                <label
-                  htmlFor="method"
-                  className="text-sm font-medium text-slate-700 block mb-2"
-                >
-                  Payment Method
-                </label>
-                <select
-                  id="method"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={paymentMethod}
-                  onChange={(e) => {
-                    setPaymentMethod(e.target.value);
-                    if (e.target.value !== "CHEQUE") setChequeId("");
-                    if (e.target.value === "CASH" && !requiresBankAccount) setBankAccountId("");
-                  }}
-                >
-                  <option value="CASH">Cash</option>
-                  <option value="CHEQUE">Cheque</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="ONLINE">Online</option>
-                </select>
-              </div>
+              {showPaymentMethod && (
+                <div>
+                  <label
+                    htmlFor="method"
+                    className="text-sm font-medium text-slate-700 block mb-2"
+                  >
+                    Payment Method
+                  </label>
+                  <select
+                    id="method"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                    value={paymentMethod}
+                    disabled={!!autoPaymentMethod}
+                    onChange={(e) => {
+                      setPaymentMethod(e.target.value);
+                      if (e.target.value !== "CHEQUE") setChequeId("");
+                      if (
+                        e.target.value === "CASH" &&
+                        !requiresBankAccount
+                      )
+                        setBankAccountId("");
+                    }}
+                  >
+                    {/* Show only the auto‑selected option when disabled */}
+                    {autoPaymentMethod ? (
+                      <option value={autoPaymentMethod}>
+                        {autoPaymentMethod === "BANK_TRANSFER"
+                          ? "Bank Transfer"
+                          : autoPaymentMethod === "CHEQUE"
+                          ? "Cheque"
+                          : autoPaymentMethod === "ONLINE"
+                          ? "Online"
+                          : autoPaymentMethod}
+                      </option>
+                    ) : (
+                      <>
+                        <option value="CASH">Cash</option>
+                        <option value="CHEQUE">Cheque</option>
+                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                        <option value="ONLINE">Online</option>
+                      </>
+                    )}
+                  </select>
+                  {autoPaymentMethod && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Method locked for this category.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Category */}
@@ -401,6 +468,7 @@ export default function NewVoucherPage() {
                 onChange={(e) => {
                   setCategory(e.target.value);
                   const cat = e.target.value;
+                  // Auto‑fill description
                   if (cat === "BANK_INTEREST")
                     setDescription("Bank Interest Received");
                   else if (cat === "BANK_CHARGES")
@@ -424,8 +492,8 @@ export default function NewVoucherPage() {
               </select>
             </div>
 
-            {/* Jewellery Donation Details — only for RECEIPT + JEWELLERY_DONATION */}
-            {voucherType === "RECEIPT" && category === "JEWELLERY_DONATION" && (
+            {/* Jewellery Donation Details */}
+            {isJewelleryDonation && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
                 <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
                   Jewellery Details (Gold/Silver)
@@ -471,8 +539,9 @@ export default function NewVoucherPage() {
               </div>
             )}
 
-            {/* Bank Account — always show for auto‑post categories, otherwise only for non‑cash */}
-            {(paymentMethod !== "CASH" || requiresBankAccount) && (
+            {/* Bank Account – always show for auto‑post categories, otherwise only for non‑cash */}
+            {(paymentMethod !== "CASH" && !isJewelleryDonation) ||
+            requiresBankAccount ? (
               <div>
                 <label
                   htmlFor="bankAccount"
@@ -481,7 +550,9 @@ export default function NewVoucherPage() {
                   {paymentMethod === "CHEQUE"
                     ? "Bank Account (Cheque Book)"
                     : "Bank Account"}
-                  {requiresBankAccount && <span className="text-red-500"> *</span>}
+                  {requiresBankAccount && (
+                    <span className="text-red-500"> *</span>
+                  )}
                 </label>
                 <select
                   id="bankAccount"
@@ -522,9 +593,9 @@ export default function NewVoucherPage() {
                   </p>
                 )}
               </div>
-            )}
+            ) : null}
 
-            {/* Registered Cheque selector — only for PAYMENT + CHEQUE */}
+            {/* Registered Cheque selector – only for PAYMENT + CHEQUE */}
             {voucherType === "PAYMENT" && paymentMethod === "CHEQUE" && (
               <div>
                 <label
@@ -578,7 +649,7 @@ export default function NewVoucherPage() {
               </div>
             )}
 
-            {/* Received Cheque Details — only for RECEIPT + CHEQUE */}
+            {/* Received Cheque Details – only for RECEIPT + CHEQUE */}
             {voucherType === "RECEIPT" && paymentMethod === "CHEQUE" && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
                 <p className="text-sm font-semibold text-amber-800">
@@ -632,27 +703,28 @@ export default function NewVoucherPage() {
               </div>
             )}
 
-            {/* Reference Number — for non-cheque bank transactions */}
+            {/* Reference Number – for non-cheque bank transactions */}
             {(paymentMethod === "BANK_TRANSFER" ||
               paymentMethod === "ONLINE" ||
               category === "BANK_INTEREST" ||
               category === "BANK_CHARGES" ||
-              category === "DIRECT_DEPOSIT") && (
-              <div>
-                <label
-                  htmlFor="referenceNumber"
-                  className="text-sm font-medium text-slate-700 block mb-2"
-                >
-                  Reference Number / UTR
-                </label>
-                <Input
-                  id="referenceNumber"
-                  value={referenceNumber}
-                  onChange={(e) => setReferenceNumber(e.target.value)}
-                  placeholder="Enter reference number or UTR"
-                />
-              </div>
-            )}
+              category === "DIRECT_DEPOSIT") &&
+              !isJewelleryDonation && (
+                <div>
+                  <label
+                    htmlFor="referenceNumber"
+                    className="text-sm font-medium text-slate-700 block mb-2"
+                  >
+                    Reference Number / UTR
+                  </label>
+                  <Input
+                    id="referenceNumber"
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value)}
+                    placeholder="Enter reference number or UTR"
+                  />
+                </div>
+              )}
 
             {/* Payee section */}
             <div className="grid grid-cols-2 gap-4">
