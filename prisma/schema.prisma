@@ -230,12 +230,12 @@ model PaymentVoucher {
   financialYearId String?        @db.ObjectId
   financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
 
-  // ----- NEW FIELDS FOR BANK & AUTO-POST -----
+  // ----- BANK ACCOUNT LINK -----
   bankAccountId String?      @db.ObjectId
   bankAccount   BankAccount? @relation("VoucherBankAccount", fields: [bankAccountId], references: [id])
 
-  // Optional one-to-one link to the auto-created BankTransaction
-  bankTransaction BankTransaction?
+  // ----- BANK TRANSACTIONS (one-to-many) -----
+  bankTransactions BankTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -314,9 +314,11 @@ model BankAccount {
   updatedAt      DateTime @updatedAt
 
   // Relations
-  bankTransactions  BankTransaction[]   // all credit / debit entries
-  chequeRegisters   ChequeRegister[]    // cheques belonging to this account
-  vouchers          PaymentVoucher[]    @relation("VoucherBankAccount") // vouchers using this bank account
+  bankTransactions  BankTransaction[]        // all credit / debit entries
+  chequeRegisters   ChequeRegister[]         // cheques belonging to this account
+  vouchers          PaymentVoucher[]         @relation("VoucherBankAccount") // vouchers using this bank account
+  deposits          BankDeposit[]            // deposits made to this account
+  reconciliations   BankReconciliation[]    // reconciliations for this account
 }
 
 model BankDeposit {
