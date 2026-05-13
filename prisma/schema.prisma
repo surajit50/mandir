@@ -80,7 +80,9 @@ model DonationCollection {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-jewelleryAssets JewelleryAsset[]
+
+  jewelleryAssets JewelleryAsset[]
+
   // Relations
   donationItems DonationItem[]
   cashBook      CashBook[]
@@ -209,16 +211,16 @@ model PaymentVoucher {
   description   String
   paymentMethod PaymentMethod
 
-  // Transaction category for classification (Bank Interest, Bank Charges, etc.)
+  // Transaction category (Bank Interest, Bank Charges, etc.)
   category String?
 
-  // Reference details for cheque numbers, UTR numbers, transaction refs, etc.
+  // Reference details for cheque numbers, UTR numbers, etc.
   referenceNumber String?
   referenceDate   DateTime?
 
   // Jewellery details (for RECEIPT vouchers of jewellery donations)
   metalType String? // Gold, Silver
-  weight    Float? // In Grams
+  weight    Float?  // In Grams
   purity    String? // 22K, 24K, 925, etc.
 
   status     VoucherStatus @default(DRAFT)
@@ -227,6 +229,13 @@ model PaymentVoucher {
 
   financialYearId String?        @db.ObjectId
   financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
+
+  // ----- NEW FIELDS FOR BANK & AUTO-POST -----
+  bankAccountId String?      @db.ObjectId
+  bankAccount   BankAccount? @relation("VoucherBankAccount", fields: [bankAccountId], references: [id])
+
+  // Optional one-to-one link to the auto-created BankTransaction
+  bankTransaction BankTransaction?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -291,7 +300,6 @@ model CashBook {
 // BANK ACCOUNT & DEPOSIT MODELS
 // ============================================
 
-// ------------------- Bank Account -------------------
 model BankAccount {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   accountNumber  String
@@ -913,14 +921,19 @@ model JewelleryAsset {
 
   @@index([metalType])
 }
+
+// ============================================
+// BANK TRANSACTIONS (for instant posting & reconciliation)
+// ============================================
+
 model BankTransaction {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  bankAccountId   String
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  bankAccountId   String    @db.ObjectId
   bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id])
   amount          Float
   type            String    // "CREDIT" or "DEBIT"
   description     String?
-  voucherId       String?
+  voucherId       String?   @db.ObjectId
   paymentVoucher  PaymentVoucher? @relation(fields: [voucherId], references: [id])
   transactionDate DateTime  @default(now())
   createdAt       DateTime  @default(now())
