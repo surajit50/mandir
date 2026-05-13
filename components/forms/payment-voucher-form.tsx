@@ -16,19 +16,22 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// ============================================
+// TYPES (matching backend responses)
+// ============================================
 
 interface Payee {
   id: string;
   name: string;
   email?: string | null;
+  payeeType?: string;
 }
 
 interface Cheque {
   id: string;
   chequeNumber: string;
   amount: number;
-  payeeName: string;
+  payeeName: string; // computed by API from linked voucher
   status: string;
   account?: {
     id: string;
@@ -46,6 +49,15 @@ interface BankAccount {
   pendingPayments: number;
   potentialBalance: number;
 }
+
+interface CashBalance {
+  balance: number;
+  pendingPayments?: number;
+}
+
+// ============================================
+// CONSTANTS
+// ============================================
 
 const RECEIPT_CATEGORIES = [
   { value: "DONATION", label: "Donation" },
@@ -92,19 +104,35 @@ const PAYEE_TYPES = [
   { value: "MEMBER", label: "Temple Member" },
 ];
 
+// ============================================
+// FETCHER
+// ============================================
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+  return res.json();
+};
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
+
 export function PaymentVoucherForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Form state
   const [voucherDate, setVoucherDate] = useState(
-    new Date().toISOString().split("T")[0],
+    new Date().toISOString().split("T")[0]
   );
   const [voucherType, setVoucherType] = useState<"PAYMENT" | "RECEIPT">(
-    "PAYMENT",
+    "PAYMENT"
   );
   const [payeeId, setPayeeId] = useState("");
   const [payeeName, setPayeeName] = useState("");
   const [payeeEmail, setPayeeEmail] = useState("");
+  const [payeeType, setPayeeType] = useState("OTHER");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
@@ -114,122 +142,124 @@ export function PaymentVoucherForm() {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [referenceDate, setReferenceDate] = useState("");
   const [receivedChequeBank, setReceivedChequeBank] = useState("");
-  const [payeeType, setPayeeType] = useState("OTHER");
-  const [availableBalance, setAvailableBalance] = useState<number | null>(null);
-  const [pendingBalance, setPendingBalance] = useState<number>(0);
-
-  // New fields for Jewellery Donation
+  // Jewellery fields
   const [metalType, setMetalType] = useState("Gold");
   const [weight, setWeight] = useState("");
   const [purity, setPurity] = useState("");
 
-  // Fetch saved payees for quick reuse
-  const { data: payees } = useSWR<Payee[]>("/api/payees", fetcher, {
-    revalidateOnFocus: false,
-  });
-  const { data: cheques } = useSWR<Cheque[]>(
+  // Fetch data
+  const { data: payees, error: payeesError } = useSWR<Payee[]>(
+    "/api/payees",
+    fetcher
+  );
+  const { data: cheques, error: chequesError } = useSWR<Cheque[]>(
     "/api/cheques?includeUnassigned=true",
-    fetcher,
-    {
-      revalidateOnFocus: false,
-    },
+    fetcher
   );
-  const { data: bankAccounts } = useSWR<BankAccount[]>(
-    "/api/bank-accounts",
-    fetcher,
-    {
-      revalidateOnFocus: false,
-    },
-  );
-
-  // Fetch current cash balance
-  const { data: cashBalanceData } = useSWR<{ balance: number }>(
+  const { data: bankAccounts, error: bankAccountsError } = useSWR<
+    BankAccount[]
+  >("/api/bank-accounts", fetcher);
+  const { data: cashBalanceData, error: cashError } = useSWR<CashBalance>(
     "/api/cash-book/balance",
-    fetcher,
+    fetcher
   );
 
-  // Determine the forced payment method based on category (null = user choice)
+  // Loading / error states
+  const isLoadingData = !payees || !cheques || !bankAccounts || !cashBalanceData;
+  if (payeesError || chequesError || bankAccountsError || cashError) {
+    toast.error("Failed to load required data. Please refresh the page.");
+  }
+
+  // Derived values
+  const isJewelleryDonation =
+    voucherType === "RECEIPT" && category === "JEWELLERY_DONATION";
+  const showPaymentMethod = !isJewelleryDonation;
+  const requiresBankAccount =
+    voucherType === "RECEIPT" && INSTANT_POST_CATEGORIES.includes(category);
+
+  // Auto payment method based on category
   const autoPaymentMethod = (() => {
-    if (voucherType !== "RECEIPT") return null; // only for receipts
-    if (category === "JEWELLERY_DONATION") return "CASH"; // placeholder, not shown
+    if (voucherType !== "RECEIPT") return null;
+    if (category === "JEWELLERY_DONATION") return "CASH";
     if (category === "BANK_INTEREST") return "BANK_TRANSFER";
     if (category === "DIRECT_DEPOSIT") return "BANK_TRANSFER";
     if (category === "BANK_TRANSFER_RECEIVED") return "BANK_TRANSFER";
     if (category === "ONLINE_RECEIVED") return "ONLINE";
     if (category === "CHEQUE_RECEIVED") return "CHEQUE";
-    return null; // DONATION, RENT_INCOME, OTHER_INCOME – free choice
+    return null;
   })();
 
-  // Derived booleans for showing/hiding sections
-  const isJewelleryDonation =
-    voucherType === "RECEIPT" && category === "JEWELLERY_DONATION";
-  const showPaymentMethod = !isJewelleryDonation; // hide for jewellery
-  const requiresBankAccount =
-    voucherType === "RECEIPT" && INSTANT_POST_CATEGORIES.includes(category);
+  // Available cheques (issued only)
+  const availableCheques =
+    cheques
+      ?.filter((cheque) => cheque.status === "ISSUED")
+      .sort((a, b) => {
+        const numA = parseInt(a.chequeNumber, 10);
+        const numB = parseInt(b.chequeNumber, 10);
+        if (isNaN(numA) || isNaN(numB)) {
+          return a.chequeNumber.localeCompare(b.chequeNumber);
+        }
+        return numA - numB;
+      }) ?? [];
 
-  // Auto‑set payment method when category changes
+  // Balance display for PAYMENT vouchers
+  const currentBalance = (() => {
+    if (voucherType === "RECEIPT") return null;
+    if (paymentMethod === "CASH") return cashBalanceData?.balance ?? null;
+    if (bankAccountId) {
+      const acc = bankAccounts?.find((a) => a.id === bankAccountId);
+      return acc?.currentBalance ?? null;
+    }
+    return null;
+  })();
+
+  const pendingPayments = (() => {
+    if (voucherType === "RECEIPT") return 0;
+    if (paymentMethod === "CASH")
+      return (cashBalanceData as any)?.pendingPayments ?? 0;
+    if (bankAccountId) {
+      const acc = bankAccounts?.find((a) => a.id === bankAccountId);
+      return acc?.pendingPayments ?? 0;
+    }
+    return 0;
+  })();
+
+  const potentialBalance =
+    currentBalance !== null ? currentBalance - pendingPayments : null;
+
+  const amountNumber = parseFloat(amount || "0");
+  const exceedsBalance =
+    voucherType === "PAYMENT" &&
+    currentBalance !== null &&
+    amountNumber > currentBalance;
+  const exceedsPotential =
+    voucherType === "PAYMENT" &&
+    potentialBalance !== null &&
+    amountNumber > potentialBalance;
+
+  // Effects: auto-set payment method when category changes
   useEffect(() => {
     if (autoPaymentMethod) {
       setPaymentMethod(autoPaymentMethod);
     }
   }, [autoPaymentMethod]);
 
-  // Reset fields that don't apply when category changes
+  // Reset fields when category/voucher type changes
   useEffect(() => {
     if (isJewelleryDonation) {
-      // Clear bank/cheque related fields
       setBankAccountId("");
       setChequeId("");
       setReferenceNumber("");
       setReferenceDate("");
       setReceivedChequeBank("");
-      setPaymentMethod("CASH"); // placeholder
+      setPaymentMethod("CASH");
     }
     if (voucherType === "RECEIPT" && category === "CHEQUE_RECEIVED") {
-      // Ensure cheque fields are visible and bank account is cleared (cheque has its own)
       setBankAccountId("");
     }
   }, [isJewelleryDonation, category, voucherType]);
 
-  // Update available balance logic (unchanged)
-  useEffect(() => {
-    if (voucherType === "RECEIPT") {
-      setAvailableBalance(null);
-      return;
-    }
-
-    if (paymentMethod === "CASH") {
-      setAvailableBalance(cashBalanceData?.balance ?? null);
-      setPendingBalance((cashBalanceData as any)?.pendingPayments ?? 0);
-    } else if (bankAccountId) {
-      const selectedAccount = bankAccounts?.find((a) => a.id === bankAccountId);
-      setAvailableBalance(selectedAccount?.currentBalance ?? 0);
-      setPendingBalance(selectedAccount?.pendingPayments ?? 0);
-    } else {
-      setAvailableBalance(null);
-      setPendingBalance(0);
-    }
-  }, [
-    voucherType,
-    paymentMethod,
-    bankAccountId,
-    cashBalanceData,
-    bankAccounts,
-  ]);
-
-  const availableCheques =
-    cheques
-      ?.filter((cheque) => cheque.status === "ISSUED")
-      .sort((a, b) => {
-        const numA = Number.parseInt(a.chequeNumber, 10);
-        const numB = Number.parseInt(b.chequeNumber, 10);
-        if (Number.isNaN(numA) || Number.isNaN(numB)) {
-          return a.chequeNumber.localeCompare(b.chequeNumber);
-        }
-        return numA - numB;
-      }) ?? [];
-
-  // Side effects when method/voucher type change
+  // Reset cheque selection when method changes
   useEffect(() => {
     if (!(voucherType === "PAYMENT" && paymentMethod === "CHEQUE")) {
       setChequeId("");
@@ -244,45 +274,48 @@ export function PaymentVoucherForm() {
     }
   }, [voucherType, paymentMethod, requiresBankAccount]);
 
+  // When a registered cheque is selected, auto‑fill amount and payee
+  const handleChequeSelect = (selectedId: string) => {
+    setChequeId(selectedId);
+    const selected = availableCheques.find((c) => c.id === selectedId);
+    if (selected) {
+      setAmount(selected.amount.toString());
+      setPayeeName(selected.payeeName); // ← computed payeeName from API
+      if (selected.account?.id) {
+        setBankAccountId(selected.account.id);
+      }
+    }
+  };
+
+  // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validation
     if (!voucherDate) {
       toast.error("Voucher date is required");
       return;
     }
-
     if (!payeeId && !payeeName.trim()) {
       toast.error("Payee is required");
       return;
     }
-
-    if (!amount || parseFloat(amount) <= 0) {
+    if (amountNumber <= 0) {
       toast.error("Amount must be greater than 0");
       return;
     }
-
-
-    // Note: no client-side balance check here.
-    // Balance is only deducted when an Admin APPROVES the voucher (not on DRAFT creation).
-    // The server will return a 422 with a clear message if balance is insufficient at approval time.
-
-
-    if (!description) {
+    if (!description.trim()) {
       toast.error("Description is required");
       return;
     }
-
     if (requiresBankAccount && !bankAccountId) {
       toast.error("Bank account is required for this receipt type");
       return;
     }
-
     if (voucherType === "PAYMENT" && paymentMethod === "CHEQUE" && !chequeId) {
       toast.error("Please select a registered cheque");
       return;
     }
-
     if (
       voucherType === "RECEIPT" &&
       paymentMethod === "CHEQUE" &&
@@ -294,8 +327,8 @@ export function PaymentVoucherForm() {
 
     setIsSubmitting(true);
 
+    // Build final description
     const selectedBank = bankAccounts?.find((a) => a.id === bankAccountId);
-
     let finalDescription = description;
     if (paymentMethod !== "CASH" && selectedBank) {
       finalDescription = `${description} [${selectedBank.bankName} — ${selectedBank.accountNumber}]`;
@@ -305,7 +338,9 @@ export function PaymentVoucherForm() {
       paymentMethod === "CHEQUE" &&
       referenceNumber
     ) {
-      finalDescription = `Cheque #${referenceNumber}${receivedChequeBank ? ` from ${receivedChequeBank}` : ""} — ${finalDescription}`;
+      finalDescription = `Cheque #${referenceNumber}${
+        receivedChequeBank ? ` from ${receivedChequeBank}` : ""
+      } — ${finalDescription}`;
     }
     if (referenceNumber && paymentMethod !== "CHEQUE") {
       finalDescription = `Ref: ${referenceNumber} — ${finalDescription}`;
@@ -321,10 +356,10 @@ export function PaymentVoucherForm() {
           payeeId: payeeId || undefined,
           payeeName: payeeName.trim() || undefined,
           payeeEmail: payeeEmail.trim() || undefined,
-          payeeType: payeeType,
-          amount: parseFloat(amount),
+          payeeType,
+          amount: amountNumber,
           description: finalDescription,
-          paymentMethod: isJewelleryDonation ? "CASH" : paymentMethod, // always CASH for jewellery
+          paymentMethod: isJewelleryDonation ? "CASH" : paymentMethod,
           chequeId: chequeId || undefined,
           bankAccountId: bankAccountId || undefined,
           category: category || undefined,
@@ -334,7 +369,9 @@ export function PaymentVoucherForm() {
             : undefined,
           metalType: category === "JEWELLERY_DONATION" ? metalType : undefined,
           weight:
-            category === "JEWELLERY_DONATION" ? parseFloat(weight) : undefined,
+            category === "JEWELLERY_DONATION" && weight
+              ? parseFloat(weight)
+              : undefined,
           purity: category === "JEWELLERY_DONATION" ? purity : undefined,
         }),
       });
@@ -350,26 +387,37 @@ export function PaymentVoucherForm() {
       if (isInstant) {
         toast.success("Receipt posted and approved automatically");
       } else {
-        toast.success("Voucher saved as Draft — awaiting Admin approval. Balance will be updated on approval.");
+        toast.success(
+          "Voucher saved as Draft — awaiting Admin approval. Balance will be updated on approval."
+        );
       }
       router.push(`/dashboard/vouchers/${data.id}`);
     } catch (err) {
-      toast.error("An unexpected error occurred");
       console.error(err);
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (isLoadingData) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-slate-600">Loading form data...</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 pb-10">
       <div>
         <h1 className="text-3xl font-bold text-slate-900">
           New {voucherType === "PAYMENT" ? "Payment" : "Receive"} Voucher
         </h1>
         <p className="text-slate-600 mt-2">
           Create a new {voucherType === "PAYMENT" ? "payment" : "receive"}{" "}
-          voucher
+          voucher. Drafts do not affect balances until approved.
         </p>
       </div>
 
@@ -380,21 +428,17 @@ export function PaymentVoucherForm() {
             <CardDescription>Fill in the voucher information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Row 1: Type, Date, Payment Method (dynamic columns) */}
+            {/* Row 1: Type, Date, Payment Method */}
             <div
               className={`grid ${
-                showPaymentMethod ? "grid-cols-3" : "grid-cols-2"
+                showPaymentMethod ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"
               } gap-4`}
             >
               <div>
-                <label
-                  htmlFor="type"
-                  className="text-sm font-medium text-slate-700 block mb-2"
-                >
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Voucher Type
                 </label>
                 <select
-                  id="type"
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={voucherType}
                   onChange={(e) => {
@@ -409,14 +453,10 @@ export function PaymentVoucherForm() {
               </div>
 
               <div>
-                <label
-                  htmlFor="date"
-                  className="text-sm font-medium text-slate-700 block mb-2"
-                >
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Voucher Date
                 </label>
                 <Input
-                  id="date"
                   type="date"
                   value={voucherDate}
                   onChange={(e) => setVoucherDate(e.target.value)}
@@ -426,28 +466,20 @@ export function PaymentVoucherForm() {
 
               {showPaymentMethod && (
                 <div>
-                  <label
-                    htmlFor="method"
-                    className="text-sm font-medium text-slate-700 block mb-2"
-                  >
+                  <label className="text-sm font-medium text-slate-700 block mb-2">
                     Payment Method
                   </label>
                   <select
-                    id="method"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
                     value={paymentMethod}
                     disabled={!!autoPaymentMethod}
                     onChange={(e) => {
                       setPaymentMethod(e.target.value);
                       if (e.target.value !== "CHEQUE") setChequeId("");
-                      if (
-                        e.target.value === "CASH" &&
-                        !requiresBankAccount
-                      )
+                      if (e.target.value === "CASH" && !requiresBankAccount)
                         setBankAccountId("");
                     }}
                   >
-                    {/* Show only the auto‑selected option when disabled */}
                     {autoPaymentMethod ? (
                       <option value={autoPaymentMethod}>
                         {autoPaymentMethod === "BANK_TRANSFER"
@@ -478,20 +510,16 @@ export function PaymentVoucherForm() {
 
             {/* Category */}
             <div>
-              <label
-                htmlFor="category"
-                className="text-sm font-medium text-slate-700 block mb-2"
-              >
+              <label className="text-sm font-medium text-slate-700 block mb-2">
                 Category
               </label>
               <select
-                id="category"
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={category}
                 onChange={(e) => {
-                  setCategory(e.target.value);
                   const cat = e.target.value;
-                  // Auto‑fill description
+                  setCategory(cat);
+                  // Auto‑fill description hints
                   if (cat === "BANK_INTEREST")
                     setDescription("Bank Interest Received");
                   else if (cat === "BANK_CHARGES")
@@ -518,16 +546,16 @@ export function PaymentVoucherForm() {
             {/* Jewellery Donation Details */}
             {isJewelleryDonation && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
-                <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-                  Jewellery Details (Gold/Silver)
+                <p className="text-sm font-semibold text-amber-800">
+                  Jewellery Details
                 </p>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="text-sm font-medium text-slate-700 block mb-2">
                       Metal Type
                     </label>
                     <select
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                       value={metalType}
                       onChange={(e) => setMetalType(e.target.value)}
                     >
@@ -550,106 +578,58 @@ export function PaymentVoucherForm() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-slate-700 block mb-2">
-                      Purity (e.g. 22K)
+                      Purity (e.g., 22K)
                     </label>
                     <Input
                       value={purity}
                       onChange={(e) => setPurity(e.target.value)}
-                      placeholder="e.g. 22K"
+                      placeholder="e.g., 22K"
                     />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Bank Account – always show for auto‑post categories, otherwise only for non‑cash */}
-            {(paymentMethod !== "CASH" && !isJewelleryDonation) ||
-            requiresBankAccount ? (
+            {/* Bank Account (for non-cash transactions) */}
+            {((paymentMethod !== "CASH" && !isJewelleryDonation) ||
+              requiresBankAccount) && (
               <div>
-                <label
-                  htmlFor="bankAccount"
-                  className="text-sm font-medium text-slate-700 block mb-2"
-                >
-                  {paymentMethod === "CHEQUE"
-                    ? "Bank Account (Cheque Book)"
-                    : "Bank Account"}
-                  {requiresBankAccount && (
-                    <span className="text-red-500"> *</span>
-                  )}
+                <label className="text-sm font-medium text-slate-700 block mb-2">
+                  Bank Account {requiresBankAccount && <span className="text-red-500">*</span>}
                 </label>
                 <select
-                  id="bankAccount"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   value={bankAccountId}
                   onChange={(e) => setBankAccountId(e.target.value)}
                   required={requiresBankAccount}
                 >
                   <option value="">Select bank account</option>
-                  {bankAccounts?.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.bankName} — {account.accountNumber} (
-                      {account.accountHolder})
+                  {bankAccounts?.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.bankName} — {acc.accountNumber} ({acc.accountHolder})
                     </option>
                   ))}
                 </select>
-                {paymentMethod === "BANK_TRANSFER" && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    Select the bank account{" "}
-                    {voucherType === "PAYMENT"
-                      ? "from which the transfer will be made"
-                      : "to which the transfer was received"}
-                    .
-                  </p>
-                )}
-                {paymentMethod === "ONLINE" && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    Select the bank account{" "}
-                    {voucherType === "PAYMENT"
-                      ? "used for this online payment"
-                      : "to which the online payment was received"}
-                    .
-                  </p>
-                )}
                 {requiresBankAccount && (
                   <p className="text-xs text-amber-600 mt-1">
                     This receipt will be instantly credited to the passbook.
                   </p>
                 )}
               </div>
-            ) : null}
+            )}
 
-            {/* Registered Cheque selector – only for PAYMENT + CHEQUE */}
+            {/* Registered Cheque selector (PAYMENT + CHEQUE) */}
             {voucherType === "PAYMENT" && paymentMethod === "CHEQUE" && (
               <div>
-                <label
-                  htmlFor="chequeId"
-                  className="text-sm font-medium text-slate-700 block mb-2"
-                >
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Registered Cheque
                 </label>
                 <select
-                  id="chequeId"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   value={chequeId}
-                  disabled={!cheques}
-                  onChange={(e) => {
-                    const selectedId = e.target.value;
-                    setChequeId(selectedId);
-                    const selectedCheque = availableCheques.find(
-                      (c) => c.id === selectedId,
-                    );
-                    if (selectedCheque) {
-                      setAmount(selectedCheque.amount.toString());
-                      setPayeeName(selectedCheque.payeeName);
-                      if (selectedCheque.account?.id) {
-                        setBankAccountId(selectedCheque.account.id);
-                      }
-                    }
-                  }}
+                  onChange={(e) => handleChequeSelect(e.target.value)}
                 >
-                  <option value="">
-                    {!cheques ? "Loading cheques..." : "Select issued cheque"}
-                  </option>
+                  <option value="">Select issued cheque</option>
                   {availableCheques.map((cheque) => (
                     <option key={cheque.id} value={cheque.id}>
                       #{cheque.chequeNumber} — {cheque.payeeName} (₹
@@ -658,7 +638,7 @@ export function PaymentVoucherForm() {
                     </option>
                   ))}
                 </select>
-                {cheques && availableCheques.length === 0 && (
+                {availableCheques.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">
                     No issued cheques available.{" "}
                     <Link
@@ -672,22 +652,18 @@ export function PaymentVoucherForm() {
               </div>
             )}
 
-            {/* Received Cheque Details – only for RECEIPT + CHEQUE */}
+            {/* Received Cheque Details (RECEIPT + CHEQUE) */}
             {voucherType === "RECEIPT" && paymentMethod === "CHEQUE" && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
                 <p className="text-sm font-semibold text-amber-800">
                   Received Cheque Details
                 </p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label
-                      htmlFor="chequeNumber"
-                      className="text-sm font-medium text-slate-700 block mb-2"
-                    >
+                    <label className="text-sm font-medium text-slate-700 block mb-2">
                       Cheque Number <span className="text-red-500">*</span>
                     </label>
                     <Input
-                      id="chequeNumber"
                       value={referenceNumber}
                       onChange={(e) => setReferenceNumber(e.target.value)}
                       placeholder="Enter cheque number"
@@ -695,14 +671,10 @@ export function PaymentVoucherForm() {
                     />
                   </div>
                   <div>
-                    <label
-                      htmlFor="chequeDate"
-                      className="text-sm font-medium text-slate-700 block mb-2"
-                    >
+                    <label className="text-sm font-medium text-slate-700 block mb-2">
                       Cheque Date
                     </label>
                     <Input
-                      id="chequeDate"
                       type="date"
                       value={referenceDate}
                       onChange={(e) => setReferenceDate(e.target.value)}
@@ -710,23 +682,19 @@ export function PaymentVoucherForm() {
                   </div>
                 </div>
                 <div>
-                  <label
-                    htmlFor="chequeBank"
-                    className="text-sm font-medium text-slate-700 block mb-2"
-                  >
+                  <label className="text-sm font-medium text-slate-700 block mb-2">
                     Payer's Bank Name
                   </label>
                   <Input
-                    id="chequeBank"
                     value={receivedChequeBank}
                     onChange={(e) => setReceivedChequeBank(e.target.value)}
-                    placeholder="Enter bank name (e.g. State Bank of India)"
+                    placeholder="e.g., State Bank of India"
                   />
                 </div>
               </div>
             )}
 
-            {/* Reference Number – for non-cheque bank transactions */}
+            {/* Reference Number (non-cheque bank transactions) */}
             {(paymentMethod === "BANK_TRANSFER" ||
               paymentMethod === "ONLINE" ||
               category === "BANK_INTEREST" ||
@@ -734,14 +702,10 @@ export function PaymentVoucherForm() {
               category === "DIRECT_DEPOSIT") &&
               !isJewelleryDonation && (
                 <div>
-                  <label
-                    htmlFor="referenceNumber"
-                    className="text-sm font-medium text-slate-700 block mb-2"
-                  >
+                  <label className="text-sm font-medium text-slate-700 block mb-2">
                     Reference Number / UTR
                   </label>
                   <Input
-                    id="referenceNumber"
                     value={referenceNumber}
                     onChange={(e) => setReferenceNumber(e.target.value)}
                     placeholder="Enter reference number or UTR"
@@ -749,36 +713,27 @@ export function PaymentVoucherForm() {
                 </div>
               )}
 
-            {/* Payee section */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Payee Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label
-                  htmlFor="payee"
-                  className="text-sm font-medium text-slate-700 block mb-2"
-                >
-                  {voucherType === "PAYMENT" ? "Payee" : "Payer"}
+                <label className="text-sm font-medium text-slate-700 block mb-2">
+                  {voucherType === "PAYMENT" ? "Payee" : "Payer"} (Select)
                 </label>
                 <select
-                  id="payee"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   value={payeeId}
                   onChange={(e) => {
                     const selectedId = e.target.value;
                     setPayeeId(selectedId);
-                    const selectedPayee = payees?.find(
-                      (item) => item.id === selectedId,
-                    );
-                    if (selectedPayee) {
-                      setPayeeName(selectedPayee.name);
-                      setPayeeEmail(selectedPayee.email || "");
-                      setPayeeType((selectedPayee as any).payeeType || "OTHER");
+                    const selected = payees?.find((p) => p.id === selectedId);
+                    if (selected) {
+                      setPayeeName(selected.name);
+                      setPayeeEmail(selected.email || "");
+                      setPayeeType(selected.payeeType || "OTHER");
                     }
                   }}
                 >
-                  <option value="">
-                    Select existing{" "}
-                    {voucherType === "PAYMENT" ? "payee" : "payer"} (optional)
-                  </option>
+                  <option value="">Select existing (optional)</option>
                   {payees?.map((payee) => (
                     <option key={payee.id} value={payee.id}>
                       {payee.name}
@@ -787,20 +742,17 @@ export function PaymentVoucherForm() {
                   ))}
                 </select>
                 <p className="text-xs text-slate-500 mt-1">
-                  Or enter a new payee below.
+                  Or enter a new one below.
                 </p>
               </div>
 
-              <div className="flex flex-col gap-4">
+              <div className="space-y-3">
                 <div>
-                  <label
-                    htmlFor="payeeName"
-                    className="text-sm font-medium text-slate-700 block mb-2"
-                  >
-                    {voucherType === "PAYMENT" ? "Payee" : "Payer"} Name
+                  <label className="text-sm font-medium text-slate-700 block mb-2">
+                    {voucherType === "PAYMENT" ? "Payee" : "Payer"} Name{" "}
+                    {!payeeId && <span className="text-red-500">*</span>}
                   </label>
                   <Input
-                    id="payeeName"
                     value={payeeName}
                     onChange={(e) => {
                       setPayeeName(e.target.value);
@@ -811,14 +763,10 @@ export function PaymentVoucherForm() {
                   />
                 </div>
                 <div>
-                  <label
-                    htmlFor="payeeEmail"
-                    className="text-sm font-medium text-slate-700 block mb-2"
-                  >
+                  <label className="text-sm font-medium text-slate-700 block mb-2">
                     Email (Optional)
                   </label>
                   <Input
-                    id="payeeEmail"
                     type="email"
                     value={payeeEmail}
                     onChange={(e) => setPayeeEmail(e.target.value)}
@@ -826,15 +774,11 @@ export function PaymentVoucherForm() {
                   />
                 </div>
                 <div>
-                  <label
-                    htmlFor="payeeType"
-                    className="text-sm font-medium text-slate-700 block mb-2"
-                  >
+                  <label className="text-sm font-medium text-slate-700 block mb-2">
                     Payee Type
                   </label>
                   <select
-                    id="payeeType"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                     value={payeeType}
                     onChange={(e) => setPayeeType(e.target.value)}
                   >
@@ -848,85 +792,85 @@ export function PaymentVoucherForm() {
               </div>
             </div>
 
+            {/* Amount */}
             <div>
-              <label
-                htmlFor="amount"
-                className="text-sm font-medium text-slate-700 block mb-2"
-              >
-                Amount
+              <label className="text-sm font-medium text-slate-700 block mb-2">
+                Amount (₹)
               </label>
-              <div className="space-y-2">
-                <Input
-                  id="amount"
-                  type="number"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  required
-                  min="0"
-                  step="0.01"
-                  className={
-                    voucherType === "PAYMENT" &&
-                    availableBalance !== null &&
-                    parseFloat(amount || "0") > availableBalance
-                      ? "border-red-500 focus:ring-red-500"
-                      : ""
-                  }
-                />
-                {voucherType === "PAYMENT" && availableBalance !== null && (
-                  <div
-                    className={`text-xs font-medium px-2 py-1 rounded-md ${
-                      parseFloat(amount || "0") > (availableBalance - pendingBalance)
-                        ? "bg-amber-50 text-amber-700 border border-amber-100"
-                        : "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span>
-                        Current Balance: ₹{availableBalance.toLocaleString()}
-                      </span>
-                      {pendingBalance > 0 && (
-                        <span className="text-amber-600 font-semibold">
-                          Pending: ₹{pendingBalance.toLocaleString()}
-                        </span>
-                      )}
-                    </div>
-                    {pendingBalance > 0 && (
-                      <div className="flex justify-between items-center mt-0.5 pt-0.5 border-t border-current border-opacity-10">
-                        <span>Potential (if all approved):</span>
-                        <span className={availableBalance - pendingBalance < 0 ? "text-red-600 font-bold" : ""}>
-                          ₹{(availableBalance - pendingBalance).toLocaleString()}
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+                min="0"
+                step="0.01"
+                className={
+                  exceedsBalance || exceedsPotential
+                    ? "border-red-500 focus:ring-red-500"
+                    : ""
+                }
+              />
+              {voucherType === "PAYMENT" && currentBalance !== null && (
+                <div
+                  className={`mt-2 text-xs p-2 rounded-md ${
+                    exceedsBalance || exceedsPotential
+                      ? "bg-red-50 text-red-700 border border-red-200"
+                      : "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                  }`}
+                >
+                  <div className="flex justify-between">
+                    <span>Current Balance:</span>
+                    <span className="font-semibold">
+                      ₹{currentBalance.toLocaleString()}
+                    </span>
+                  </div>
+                  {pendingPayments > 0 && (
+                    <>
+                      <div className="flex justify-between mt-1">
+                        <span>Pending Approvals:</span>
+                        <span className="font-semibold">
+                          ₹{pendingPayments.toLocaleString()}
                         </span>
                       </div>
-                    )}
-                    <div className="flex justify-between items-center mt-1">
-                      {parseFloat(amount || "0") > (availableBalance - pendingBalance) && (
-                        <span className="flex items-center gap-1 text-[10px] text-amber-600">
-                          <AlertCircle className="w-3 h-3" />
-                          {parseFloat(amount || "0") > availableBalance 
-                            ? "Exceeds current balance" 
-                            : "Exceeds potential balance"}
+                      <div className="flex justify-between mt-1">
+                        <span>Potential Balance:</span>
+                        <span
+                          className={`font-semibold ${
+                            potentialBalance !== null && potentialBalance < 0
+                              ? "text-red-600"
+                              : ""
+                          }`}
+                        >
+                          ₹
+                          {potentialBalance !== null
+                            ? potentialBalance.toLocaleString()
+                            : "—"}
                         </span>
-                      )}
+                      </div>
+                    </>
+                  )}
+                  {(exceedsBalance || exceedsPotential) && (
+                    <div className="flex items-center gap-1 mt-2 text-[11px] font-medium">
+                      <AlertCircle className="w-3 h-3" />
+                      {exceedsBalance
+                        ? "Amount exceeds current available balance."
+                        : "Amount exceeds potential balance after pending approvals."}
                     </div>
-                    <p className="text-[10px] opacity-70 mt-0.5">
-                      Balance deducted only after Admin approval. 
-                      {availableBalance - pendingBalance < 0 && " WARNING: Negative balance potential!"}
-                    </p>
-                  </div>
-                )}
-              </div>
+                  )}
+                  <p className="text-[10px] opacity-70 mt-1">
+                    Note: Balance is deducted only after Admin approval.
+                  </p>
+                </div>
+              )}
             </div>
 
+            {/* Description */}
             <div>
-              <label
-                htmlFor="description"
-                className="text-sm font-medium text-slate-700 block mb-2"
-              >
+              <label className="text-sm font-medium text-slate-700 block mb-2">
                 Description
               </label>
               <textarea
-                id="description"
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows={3}
                 value={description}
@@ -943,7 +887,7 @@ export function PaymentVoucherForm() {
         </Card>
 
         {/* Summary */}
-        {amount && (
+        {amountNumber > 0 && (
           <Card className="bg-blue-50 border-blue-200">
             <CardContent className="pt-6">
               <div className="flex justify-between items-center">
@@ -951,7 +895,7 @@ export function PaymentVoucherForm() {
                   Total Amount:
                 </p>
                 <p className="text-3xl font-bold text-blue-600">
-                  ₹{parseFloat(amount || "0").toLocaleString()}
+                  ₹{amountNumber.toLocaleString()}
                 </p>
               </div>
             </CardContent>
