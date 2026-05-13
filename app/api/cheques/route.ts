@@ -8,8 +8,7 @@ const ChequeSchema = z.object({
   chequeNumber: z.string().min(1, "Cheque number is required"),
   chequeBookNumber: z.string().optional(),
   chequeDate: z.string().datetime(),
-  amount: z.number().positive("Amount must be greater than 0"),
-  payeeName: z.string().min(1, "Payee name is required"),
+  amount: z.number().min(0, "Amount must be 0 or greater"),
   accountId: z.string().min(1, "Account is required"),
   status: z.enum(["ISSUED", "DEPOSITED", "CLEARED", "BOUNCED", "CANCELLED"]).default("ISSUED"),
 });
@@ -87,8 +86,7 @@ export async function POST(request: NextRequest) {
             chequeNumber,
             chequeBookNumber: validatedBook.chequeBookNumber || null,
             chequeDate,
-            amount: 0,
-            payeeName: "UNASSIGNED",
+            amount: 0, // Blank leaves have 0 amount
             accountId: validatedBook.accountId,
             status: "ISSUED",
             financialYearId: currentFY?.id,
@@ -114,7 +112,7 @@ export async function POST(request: NextRequest) {
             userRole: userRole,
             action: "CREATE",
             module: "ChequeRegister",
-            entityId: createdCheques[0].id, // Reference first cheque as example
+            entityId: createdCheques[0].id,
             entityType: "ChequeBook",
             status: "SUCCESS",
           },
@@ -158,7 +156,6 @@ export async function POST(request: NextRequest) {
         chequeBookNumber: validatedData.chequeBookNumber || null,
         chequeDate: new Date(validatedData.chequeDate),
         amount: validatedData.amount,
-        payeeName: validatedData.payeeName,
         accountId: validatedData.accountId,
         status: validatedData.status,
         financialYearId: currentFY?.id,
@@ -213,6 +210,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const includeUnassigned = searchParams.get("includeUnassigned") === "true";
 
+    // Fetch cheques with linked voucher payee information
     const cheques = await prisma.chequeRegister.findMany({
       where: includeUnassigned
         ? {
@@ -225,15 +223,22 @@ export async function GET(request: NextRequest) {
             },
           }
         : {
-            // Exclude placeholder cheque leaves (blank/unused)
-            // Real cheques have a proper payee name AND amount > ₹0
-            NOT: {
-              payeeName: "UNASSIGNED",
-              amount: { lte: 0 },
-            },
+            // Exclude blank cheque leaves (amount = 0 and not linked to any voucher)
+            OR: [
+              { amount: { gt: 0 } },
+              {
+                paymentVouchers: {
+                  some: {},
+                },
+              },
+            ],
           },
       include: {
         account: { select: { id: true, bankName: true, accountNumber: true } },
+        paymentVouchers: {
+          take: 1,
+          select: { payee: { select: { name: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
