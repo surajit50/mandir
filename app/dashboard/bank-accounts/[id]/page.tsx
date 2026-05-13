@@ -1,198 +1,165 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { AlertCircle, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Download } from "lucide-react";
+import useSWR from "swr";
 
-interface BankAccountDetail {
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+interface BankAccount {
   id: string;
   accountNumber: string;
   bankName: string;
   accountHolder: string;
-  accountType: string;
-  openingBalance: number;
   currentBalance: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
-export default function BankAccountDetailPage() {
-  const params = useParams();
-  const accountId = params.id as string;
+interface BankTransaction {
+  id: string;
+  amount: number;
+  type: string; // "CREDIT" | "DEBIT"
+  description: string | null;
+  transactionDate: string;
+  paymentVoucher?: {
+    voucherNumber: string;
+  } | null;
+  createdAt: string;
+}
 
-  const [account, setAccount] = useState<BankAccountDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+export default function PassbookPage() {
+  const { id } = useParams<{ id: string }>();
 
-  useEffect(() => {
-    const fetchAccount = async () => {
-      try {
-        const response = await fetch(`/api/bank-accounts/${accountId}`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch account");
-        }
-        const data = await response.json();
-        setAccount(data);
-      } catch (err) {
-        setError("Failed to load account details");
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAccount();
-  }, [accountId]);
+  const { data, error, isLoading } = useSWR<{
+    account: BankAccount;
+    transactions: BankTransaction[];
+  }>(id ? `/api/bank-accounts/${id}/passbook` : null, fetcher);
 
   if (isLoading) {
+    return <div className="py-12 text-center text-muted-foreground">Loading passbook...</div>;
+  }
+
+  if (error || !data) {
     return (
-      <div className="text-center py-12">
-        <p className="text-slate-600">Loading account details...</p>
-      </div>
+      <Card className="border-destructive/30 bg-destructive/5">
+        <CardContent className="pt-6">
+          <p className="text-destructive">Error loading passbook</p>
+          <Link href="/dashboard/bank-accounts">
+            <Button variant="outline" className="mt-4">Back to Accounts</Button>
+          </Link>
+        </CardContent>
+      </Card>
     );
   }
 
-  if (error || !account) {
-    return (
-      <div className="space-y-4">
-        <Link href="/dashboard/bank-accounts">
-          <Button variant="outline">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Accounts
-          </Button>
-        </Link>
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex gap-2 items-start">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-              <p className="text-red-700">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const difference = account.currentBalance - account.openingBalance;
-  const changePercentage = ((difference / account.openingBalance) * 100).toFixed(2);
+  const { account, transactions } = data;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Passbook</h1>
+          <p className="text-muted-foreground mt-1">
+            {account.bankName} — {account.accountNumber}
+          </p>
+        </div>
+        <div className="flex gap-2">
           <Link href="/dashboard/bank-accounts">
-            <Button variant="outline">
+            <Button variant="outline" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
           </Link>
-          <h1 className="text-3xl font-bold text-slate-900">
-            {account.bankName}
-          </h1>
+          {/* You can add a download/export feature later */}
         </div>
-        <span
-          className={`text-sm font-medium px-3 py-1 rounded ${
-            account.isActive
-              ? "bg-green-100 text-green-700"
-              : "bg-red-100 text-red-700"
-          }`}
-        >
-          {account.isActive ? "Active" : "Inactive"}
-        </span>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">
-              Opening Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-slate-900">
-              ₹{account.openingBalance.toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">
-              Current Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-blue-600">
-              ₹{account.currentBalance.toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">
-              Change
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p
-              className={`text-2xl font-bold ${
-                difference >= 0 ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              ₹{difference.toLocaleString()}
-            </p>
-            <p
-              className={`text-xs mt-1 ${
-                difference >= 0 ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {difference >= 0 ? "+" : ""}{changePercentage}%
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Account Details */}
+      {/* Current Balance Summary */}
       <Card>
-        <CardHeader>
-          <CardTitle>Account Information</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Current Balance
+          </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-6">
-          <div>
-            <p className="text-sm text-slate-600 mb-2">Account Number</p>
-            <p className="font-semibold text-slate-900">{account.accountNumber}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-600 mb-2">Account Type</p>
-            <p className="font-semibold text-slate-900">{account.accountType}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-600 mb-2">Account Holder</p>
-            <p className="font-semibold text-slate-900">{account.accountHolder}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-600 mb-2">Created</p>
-            <p className="font-semibold text-slate-900">
-              {new Date(account.createdAt).toLocaleDateString()}
-            </p>
-          </div>
+        <CardContent>
+          <p className="text-3xl font-bold text-emerald-600">
+            ₹{account.currentBalance.toLocaleString()}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Holder: {account.accountHolder}
+          </p>
         </CardContent>
       </Card>
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <Link href={`/dashboard/bank-reconciliation/new?accountId=${accountId}`}>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            Reconcile Account
-          </Button>
-        </Link>
-      </div>
+      {/* Transactions Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Transaction History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {transactions.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">No transactions found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-2 pr-4 font-medium">Date</th>
+                    <th className="py-2 pr-4 font-medium">Description</th>
+                    <th className="py-2 pr-4 font-medium">Voucher</th>
+                    <th className="py-2 pr-4 font-medium text-right">Amount</th>
+                    <th className="py-2 font-medium text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx, index) => {
+                    // Running balance for display (we can compute from the bottom or just leave blank)
+                    // Simpler: show the transaction amount only, balance can be derived but we need order.
+                    // We'll compute cumulative balance assuming ascending order of date, but the data is descending.
+                    // For simplicity, we'll reverse the array to compute from oldest to newest.
+                    // But that would require calculation. We'll just show amount and "type".
+                    const isCredit = tx.type === "CREDIT";
+                    const amountFormatted = (isCredit ? "+" : "-") + "₹" + tx.amount.toLocaleString();
+                    const date = new Date(tx.transactionDate).toLocaleDateString("en-IN", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    });
+
+                    return (
+                      <tr key={tx.id} className="border-b border-border last:border-0 hover:bg-slate-50 transition-colors">
+                        <td className="py-2 pr-4 whitespace-nowrap">{date}</td>
+                        <td className="py-2 pr-4">{tx.description || "—"}</td>
+                        <td className="py-2 pr-4">
+                          {tx.paymentVoucher ? (
+                            <Link
+                              href={`/dashboard/vouchers/${tx.paymentVoucher.voucherNumber}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {tx.paymentVoucher.voucherNumber}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className={`py-2 pr-4 text-right font-medium ${isCredit ? "text-emerald-600" : "text-red-600"}`}>
+                          {amountFormatted}
+                        </td>
+                        <td className="py-2 text-right font-mono">
+                          {/* Balance would be computed if we had order. For now we skip or use placeholder */}
+                          {/* We can add a running balance column later if desired */}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
