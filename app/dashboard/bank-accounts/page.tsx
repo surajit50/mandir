@@ -1,3 +1,4 @@
+// app/dashboard/bank-accounts/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -22,13 +23,14 @@ interface BankAccount {
 }
 
 export default function BankAccountsPage() {
-  const { data: accounts, error, isLoading, mutate } = useSWR<BankAccount[]>(
+  const { data: accounts, error, isLoading } = useSWR<BankAccount[]>(
     "/api/bank-accounts",
     fetcher
   );
 
-  const totalBalance = accounts?.reduce((sum, acc) => sum + acc.currentBalance, 0) || 0;
-  const totalOpeningBalance = accounts?.reduce((sum, acc) => sum + acc.openingBalance, 0) || 0;
+  // Compute totals safely
+  const totalBalance = accounts?.reduce((sum, acc) => sum + (acc.currentBalance || 0), 0) || 0;
+  const totalOpeningBalance = accounts?.reduce((sum, acc) => sum + (acc.openingBalance || 0), 0) || 0;
 
   return (
     <div className="space-y-6">
