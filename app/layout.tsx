@@ -5,7 +5,7 @@ import AuthSessionProvider from '@/components/providers/session-provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
-
+import SessionCleanup from "@/components/session-cleanup";
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
@@ -40,6 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
+        <SessionCleanup />
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
