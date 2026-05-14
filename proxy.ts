@@ -1,56 +1,76 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+const PUBLIC_ROUTES = [
+  "/",
+  "/about",
+  "/contact",
+];
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    // Routes that should be public (unprotected)
-    const publicRoutes = ["/", "/about", "/contact", "/donations", "/events"];
-    const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+    const isPublicRoute = PUBLIC_ROUTES.some(
+      (route) =>
+        pathname === route ||
+        pathname.startsWith(`${route}/`)
+    );
 
-    // Redirect unauthenticated users to login, but allow access to public routes and /auth
-    if (!token && !pathname.startsWith("/auth") && !isPublicRoute) {
-      return NextResponse.redirect(new URL("/auth/login", req.url));
-    }
+    // Session expired
+    if (token?.exp) {
+      const currentTime = Math.floor(Date.now() / 1000);
 
-    // Role-based access control
-    const adminRoutes = ["/admin", "/dashboard/admin"];
-    const accountantRoutes = ["/dashboard/accountant", "/reports"];
-    const memberRoutes = ["/dashboard/member"];
+      if (currentTime > token.exp) {
+        const response = NextResponse.redirect(
+          new URL("/auth/login", req.url)
+        );
 
-    if (adminRoutes.some((route) => pathname.startsWith(route))) {
-      if (token?.role !== "ADMIN") {
-        return NextResponse.redirect(new URL("/unauthorized", req.url));
+        response.cookies.delete(
+          "next-auth.session-token"
+        );
+
+        response.cookies.delete(
+          "__Secure-next-auth.session-token"
+        );
+
+        return response;
       }
     }
 
-    if (accountantRoutes.some((route) => pathname.startsWith(route))) {
-      if (token?.role !== "ACCOUNTANT" && token?.role !== "ADMIN") {
-        return NextResponse.redirect(new URL("/unauthorized", req.url));
-      }
-    }
-
-    if (memberRoutes.some((route) => pathname.startsWith(route))) {
-      if (token?.role !== "MEMBER" && token?.role !== "ADMIN") {
-        return NextResponse.redirect(new URL("/unauthorized", req.url));
-      }
+    // Login required
+    if (
+      !token &&
+      !pathname.startsWith("/auth") &&
+      !isPublicRoute
+    ) {
+      return NextResponse.redirect(
+        new URL("/auth/login", req.url)
+      );
     }
 
     return NextResponse.next();
   },
+
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        const { pathname } = req.nextUrl;
-        const publicRoutes = ["/", "/about", "/contact", "/donations", "/events"];
-        const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+        const pathname = req.nextUrl.pathname;
 
-        // Allow public access to home, about, contact, donations, events, and auth pages
-        if (isPublicRoute || pathname.startsWith("/auth")) {
+        const isPublicRoute = PUBLIC_ROUTES.some(
+          (route) =>
+            pathname === route ||
+            pathname.startsWith(`${route}/`)
+        );
+
+        if (
+          isPublicRoute ||
+          pathname.startsWith("/auth")
+        ) {
           return true;
         }
+
         return !!token;
       },
     },
@@ -59,6 +79,6 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    "/((?!auth|_next/static|_next/image|favicon\\.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico).*)",
   ],
 };
