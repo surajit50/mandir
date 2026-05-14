@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, FileText, Calendar } from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 interface Receipt {
   id: string;
@@ -44,6 +46,12 @@ export default function ReceiptsPage() {
           <h1 className="text-2xl font-bold text-foreground">Donation Receipts</h1>
           <p className="text-muted-foreground mt-1">View all generated donation receipts</p>
         </div>
+        <Link href="/dashboard/receipts/new">
+          <Button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700">
+            <FileText className="w-4 h-4" />
+            Generate Receipt
+          </Button>
+        </Link>
       </div>
 
       {error && (

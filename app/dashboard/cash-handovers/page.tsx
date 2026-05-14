@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 import {
   Table,
@@ -205,28 +206,30 @@ export default function CashHandoversPage() {
                   <div className="h-4 bg-muted animate-pulse rounded w-3/4"></div>
                 </div>
               ) : pendingBalances.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-44 overflow-y-auto pr-2">
-                  {pendingBalances.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between border rounded-lg p-3 bg-muted/50"
-                    >
-                      <div>
-                        <p className="font-medium text-sm text-foreground">
-                          {member.name}
-                        </p>
+                <ScrollArea className="h-[250px] pr-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {pendingBalances.map((member) => (
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between border rounded-lg p-3 bg-muted/50"
+                      >
+                        <div>
+                          <p className="font-medium text-sm text-foreground">
+                            {member.name}
+                          </p>
 
-                        <p className="text-xs text-muted-foreground">
-                          {member.email}
+                          <p className="text-xs text-muted-foreground">
+                            {member.email}
+                          </p>
+                        </div>
+
+                        <p className="font-bold text-emerald-600">
+                          ₹{member.balance.toLocaleString()}
                         </p>
                       </div>
-
-                      <p className="font-bold text-emerald-600">
-                        ₹{member.balance.toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               ) : (
                 <div className="text-sm text-muted-foreground italic">
                   All collected cash has been handed over.

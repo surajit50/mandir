@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Landmark, MapPin, Hash } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 interface Temple {
   id: string;
@@ -47,6 +49,14 @@ export default function TemplesPage() {
           <h1 className="text-2xl font-bold text-foreground">Temples</h1>
           <p className="text-muted-foreground mt-1">Manage temples under the trust</p>
         </div>
+        {session?.user?.role === "ADMIN" && (
+          <Link href="/dashboard/temples/new">
+            <Button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700">
+              <Landmark className="w-4 h-4" />
+              New Temple
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (

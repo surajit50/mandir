@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Users, Mail, Phone } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 interface Payee {
   id: string;
@@ -45,6 +47,14 @@ export default function PayeesPage() {
           <h1 className="text-2xl font-bold text-foreground">Payees & Contacts</h1>
           <p className="text-muted-foreground mt-1">Manage all registered vendors and contacts</p>
         </div>
+        {session?.user?.role !== "MEMBER" && (
+          <Link href="/dashboard/payees/new">
+            <Button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700">
+              <Users className="w-4 h-4" />
+              New Contact
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (
