@@ -58,7 +58,7 @@ export async function POST(
     }
 
     if (newStatus === "VERIFIED") {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.bankDeposit.update({
           where: { id },
           data: {

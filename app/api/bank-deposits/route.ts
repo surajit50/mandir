@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
     const cashPortion = Math.max(0, validatedData.totalAmount - chequeTotal);
 
-    const deposit = await prisma.$transaction(async (tx) => {
+    const deposit = await prisma.$transaction(async (tx: any) => {
       const d = await tx.bankDeposit.create({
         data: {
           depositNumber,
