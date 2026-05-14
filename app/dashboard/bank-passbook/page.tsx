@@ -66,10 +66,10 @@ export default function BankPassbookPage() {
     }
   };
 
-  const openingBalance = Array.isArray(passbook) && passbook.length ? passbook[0].balance - (passbook[0].debitAmount - passbook[0].creditAmount) : 0;
+  const openingBalance = Array.isArray(passbook) && passbook.length ? passbook[0].balance - passbook[0].creditAmount + passbook[0].debitAmount : 0;
   const totalDebits = Array.isArray(passbook) ? passbook.reduce((sum, e) => sum + (e.debitAmount || 0), 0) : 0;
   const totalCredits = Array.isArray(passbook) ? passbook.reduce((sum, e) => sum + (e.creditAmount || 0), 0) : 0;
-  const closingBalance = Array.isArray(passbook) && passbook.length ? passbook[passbook.length - 1].balance : 0;
+  const closingBalance = Array.isArray(passbook) && passbook.length ? passbook[passbook.length - 1].balance : openingBalance;
 
   const handlePrint = () => {
     window.print();
@@ -237,7 +237,7 @@ export default function BankPassbookPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {passbook.map((entry, index) => (
+                    {[...(passbook || [])].reverse().map((entry, index) => (
                       <tr
                         key={entry.id}
                         className={`border-b border-slate-100 hover:bg-slate-50 ${
