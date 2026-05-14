@@ -27,7 +27,19 @@ import {
   FileText,
   RefreshCw,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -91,6 +103,29 @@ export default function VouchersPage() {
   } = useSWR<PaymentVoucher[]>("/api/vouchers", fetcher);
 
   const [isVerifying, setIsVerifying] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    try {
+      setIsDeleting(id);
+      const res = await fetch(`/api/vouchers/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to delete voucher");
+      }
+
+      toast.success("Voucher deleted successfully");
+      mutate();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Error deleting voucher");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   const handleApprove = async (id: string) => {
     try {
@@ -400,6 +435,40 @@ export default function VouchersPage() {
                               View
                             </Button>
                           </Link>
+
+                          {(voucher.status === "DRAFT" || voucher.status === "REJECTED") &&
+                            (userRole === "ADMIN" || userRole === "ACCOUNTANT") && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-destructive border-destructive/20 hover:bg-destructive/10 h-8 w-8 p-0"
+                                    disabled={isDeleting === voucher.id}
+                                    title="Delete Voucher"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Voucher</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this voucher? This action will permanently remove the record and cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => handleDelete(voucher.id)} 
+                                      className="bg-destructive hover:bg-destructive/90 text-white"
+                                    >
+                                      {isDeleting === voucher.id ? "Deleting..." : "Delete Voucher"}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                         </div>
                       </TableCell>
                     </TableRow>

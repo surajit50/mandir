@@ -89,7 +89,7 @@ export function DonationForm() {
       }
 
       toast.success("Donation collection created successfully");
-      router.push(`/dashboard/donations/${data.id}`);
+      router.push(`/dashboard/donations`);
     } catch (err) {
       toast.error("An unexpected error occurred");
       console.error(err);
