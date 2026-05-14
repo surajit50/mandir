@@ -43,7 +43,6 @@ export async function GET(
           select: {
             chequeNumber: true,
             chequeDate: true,
-            payeeName: true,
             amount: true,
           },
         },

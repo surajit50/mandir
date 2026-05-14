@@ -273,7 +273,6 @@ export async function POST(
             where: { id: voucher.chequeId },
             data: {
               amount: 0,
-              payeeName: "UNASSIGNED",
               status: "ISSUED", // Ensure it's back to ISSUED
             },
           });
