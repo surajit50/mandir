@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
+import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 import {
   Card,
@@ -145,9 +146,18 @@ export default function MembersPage() {
             variant="ghost"
             size="sm"
             title="Delete member"
-            onClick={() => {
-              if (confirm("Are you sure you want to delete this member?")) {
-                // Delete logic placeholder
+            onClick={async () => {
+              if (confirm(`Are you sure you want to delete ${row.original.name}?`)) {
+                try {
+                  const res = await fetch(`/api/users/${row.original.id}`, {
+                    method: "DELETE",
+                  });
+                  if (!res.ok) throw new Error("Failed to delete member");
+                  toast.success("Member deleted successfully");
+                  mutate("/api/users");
+                } catch (error) {
+                  toast.error("Error deleting member");
+                }
               }
             }}
           >

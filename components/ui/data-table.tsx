@@ -74,7 +74,10 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [rowSelection, setRowSelection] = React.useState({});
-  const [pageSize, setPageSize] = React.useState(defaultPageSize);
+  const [pagination, setPagination] = React.useState({
+    pageIndex: 0,
+    pageSize: defaultPageSize,
+  });
 
   const table = useReactTable({
     data,
@@ -85,7 +88,7 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       globalFilter,
       rowSelection,
-      pagination: { pageIndex: 0, pageSize },
+      pagination,
     },
     enableRowSelection: true,
     onSortingChange: setSorting,
@@ -97,13 +100,7 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    onPaginationChange: (updater) => {
-      if (typeof updater === "function") {
-        const next = updater({ pageIndex: table.getState().pagination.pageIndex, pageSize });
-        setPageSize(next.pageSize);
-        table.setPageIndex(next.pageIndex);
-      }
-    },
+    onPaginationChange: setPagination,
   });
 
   const totalRows = table.getFilteredRowModel().rows.length;
@@ -240,8 +237,8 @@ export function DataTable<TData, TValue>({
         <p className="text-muted-foreground text-xs">
           {totalRows === 0
             ? "No records"
-            : `Showing ${table.getState().pagination.pageIndex * pageSize + 1}–${Math.min(
-                (table.getState().pagination.pageIndex + 1) * pageSize,
+            : `Showing ${pagination.pageIndex * pagination.pageSize + 1}–${Math.min(
+                (pagination.pageIndex + 1) * pagination.pageSize,
                 totalRows
               )} of ${totalRows} record${totalRows !== 1 ? "s" : ""}`}
         </p>
@@ -249,11 +246,13 @@ export function DataTable<TData, TValue>({
         <div className="flex items-center gap-2">
           {/* Page size */}
           <select
-            value={pageSize}
+            value={pagination.pageSize}
             onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              table.setPageSize(Number(e.target.value));
-              table.setPageIndex(0);
+              setPagination(prev => ({
+                ...prev,
+                pageSize: Number(e.target.value),
+                pageIndex: 0,
+              }));
             }}
             className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           >
@@ -285,7 +284,7 @@ export function DataTable<TData, TValue>({
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="px-2 text-xs text-muted-foreground tabular-nums">
-              {table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}
+              {pagination.pageIndex + 1} / {table.getPageCount() || 1}
             </span>
             <Button
               variant="outline"

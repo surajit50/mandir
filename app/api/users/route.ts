@@ -15,13 +15,13 @@ export async function GET(request: NextRequest) {
     }
 
     const users = await prisma.user.findMany({
-      where: { isActive: true },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
         userType: true,
+        isActive: true,
       },
       orderBy: { name: "asc" },
     });
