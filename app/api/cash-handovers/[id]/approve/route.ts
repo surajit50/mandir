@@ -37,7 +37,7 @@ export async function POST(
       where: { isCurrent: true },
     });
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const handover = await tx.cashHandover.update({
         where: { id },
         data: {
