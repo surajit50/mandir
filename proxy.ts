@@ -5,6 +5,9 @@ const PUBLIC_ROUTES = [
   "/",
   "/about",
   "/contact",
+  "/donations",
+  "/events"
+
 ];
 
 export default withAuth(

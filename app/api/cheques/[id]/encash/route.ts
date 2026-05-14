@@ -115,39 +115,23 @@ export async function POST(
       },
     });
 
-    // Update bank account balance
-    // If RECEIVED, increment balance. If ISSUED, decrement balance.
-    await prisma.bankAccount.update({
-      where: { id: validatedData.bankAccountId },
+    // NOTE: Bank account balance and CashBook are NOT updated here because 
+    // they are already updated when the corresponding PaymentVoucher is APPROVED.
+    // Encashment only changes the cheque status to CLEARED.
+
+    // Audit log
+    await prisma.auditLog.create({
       data: {
-        currentBalance: {
-          [isReceived ? "increment" : "decrement"]: cheque.amount,
-        },
+        userId: session.user.id,
+        userName: session.user.name ?? "Unknown User",
+        userRole: userRole,
+        action: "UPDATE",
+        module: "ChequeRegister",
+        entityId: updatedCheque.id,
+        entityType: "ChequeRegister",
+        status: "SUCCESS",
       },
     });
-
-    // Create cash book entry if it doesn't exist (only for RECEIVED cheques usually, 
-    // but maybe for ISSUED too if we want to track bank transactions in cash book)
-    // Actually, ISSUED cheques are usually already recorded as payments.
-    if (isReceived) {
-      const existingEntry = await prisma.cashBook.findFirst({
-        where: { referenceId: id, referenceType: "ChequeEncashment" },
-      });
-
-      if (!existingEntry) {
-        await prisma.cashBook.create({
-          data: {
-            date: new Date(validatedData.clearedDate),
-            description: `Cheque Encashment: #${cheque.chequeNumber}`,
-            debitAmount: 0,
-            creditAmount: cheque.amount,
-            balance: 0,
-            referenceType: "ChequeEncashment",
-            referenceId: id,
-          },
-        });
-      }
-    }
 
     return NextResponse.json({
       cheque: updatedCheque,

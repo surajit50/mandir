@@ -92,25 +92,32 @@ export async function POST(
         }
 
         // Add Gold/Silver items to Jewellery Register
+        const metalCounts: Record<string, number> = {};
+        
         for (const item of donation.donationItems) {
           if (["Gold", "Silver"].includes(item.donationType)) {
-            const prefix = item.donationType === "Gold" ? "GLD" : "SLV";
-            const count = await tx.jewelleryAsset.count({
-              where: { metalType: item.donationType }
-            });
-            const jewelleryCode = `${prefix}-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
+            const metalType = item.donationType;
+            if (!(metalType in metalCounts)) {
+              metalCounts[metalType] = await tx.jewelleryAsset.count({
+                where: { metalType: metalType }
+              });
+            }
+            
+            metalCounts[metalType]++;
+            const prefix = metalType === "Gold" ? "GLD" : "SLV";
+            const jewelleryCode = `${prefix}-${new Date().getFullYear()}-${String(metalCounts[metalType]).padStart(4, "0")}`;
 
             await tx.jewelleryAsset.create({
               data: {
                 jewelleryCode,
-                jewelleryName: item.description || `${item.donationType} Donation`,
-                metalType: item.donationType,
+                jewelleryName: item.description || `${metalType} Donation`,
+                metalType: metalType,
                 weight: item.weight || 0,
                 estimatedValue: item.amount || 0,
                 donorName: item.donorName,
                 receivedDate: donation.collectionDate,
                 description: `Received via Donation Collection #${donation.id}`,
-                donationCollectionId: id,   // ← Links back to this donation
+                donationCollectionId: id,
               },
             });
           }

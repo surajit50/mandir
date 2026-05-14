@@ -274,6 +274,7 @@ model PaymentVoucher {
   cashBook             CashBook[]
   donationCollection   DonationCollection? @relation(fields: [donationCollectionId], references: [id])
   donationCollectionId String?             @db.ObjectId
+  jewelleryAssets      JewelleryAsset[]
 
   @@index([voucherDate])
   @@index([status])
@@ -947,10 +948,17 @@ model JewelleryAsset {
   estimatedValue Float     @default(0)
   receivedDate   DateTime?
   donorName      String?
+  
+  location       String    @default("Locker")
+  status         String    @default("STORED") // STORED, SOLD, MELTED, etc.
+  isForSale      Boolean   @default(false)
 
   // ----- NEW RELATION FIELDS -----
   donationCollectionId String?             @db.ObjectId
   donationCollection   DonationCollection? @relation(fields: [donationCollectionId], references: [id])
+  
+  paymentVoucherId     String?             @db.ObjectId
+  paymentVoucher       PaymentVoucher?     @relation(fields: [paymentVoucherId], references: [id])
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())

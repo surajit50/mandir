@@ -232,6 +232,7 @@ export async function POST(
               donorName: voucher.payee.name,
               receivedDate: voucher.voucherDate,
               description: `Received via Voucher #${voucher.voucherNumber}`,
+              paymentVoucherId: id,
             },
           });
         }

@@ -60,6 +60,10 @@ export default function BankDepositsPage() {
       setIsVerifying(id);
       const res = await fetch(`/api/bank-deposits/${id}/verify`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "VERIFIED" }),
       });
 
       if (!res.ok) {

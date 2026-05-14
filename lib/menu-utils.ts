@@ -114,6 +114,12 @@ export const menuGroups: MenuGroup[] = [
         icon: Building2,
         roles: ["ACCOUNTANT"],
       },
+      {
+        label: "Donation Receipts",
+        href: "/dashboard/receipts",
+        icon: FileText,
+        roles: ["ACCOUNTANT", "ADMIN"],
+      },
     ],
   },
   {
@@ -216,6 +222,18 @@ export const menuGroups: MenuGroup[] = [
         label: "Settings",
         href: "/dashboard/settings",
         icon: Settings,
+        roles: ["ADMIN"],
+      },
+      {
+        label: "Payees / Contacts",
+        href: "/dashboard/payees",
+        icon: Users,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        label: "Temples",
+        href: "/dashboard/temples",
+        icon: Landmark,
         roles: ["ADMIN"],
       },
     ],

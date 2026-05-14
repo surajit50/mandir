@@ -23,6 +23,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Eye, CheckCircle, Clock, CheckCircle2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -69,6 +80,10 @@ export default function DonationsPage() {
       setIsVerifying(id);
       const res = await fetch(`/api/donations/${id}/verify`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ verify: true }),
       });
       if (!res.ok) throw new Error("Failed to verify donation");
       toast.success("Donation verified successfully");
@@ -106,7 +121,7 @@ export default function DonationsPage() {
         </div>
         {userRole !== "ADMIN" && (
           <Link href="/dashboard/donations/new">
-            <Button className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
+            <Button className="bg-amber-600 hover:bg-amber-700 w-full sm:w-auto text-white">
               <Plus className="w-4 h-4 mr-2" />
               New Collection
             </Button>
@@ -135,7 +150,7 @@ export default function DonationsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-emerald-600">
+            <p className="text-3xl font-bold text-amber-600">
               ₹{totalCollection.toLocaleString()}
             </p>
           </CardContent>
@@ -147,7 +162,7 @@ export default function DonationsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-emerald-600">
+            <p className="text-3xl font-bold text-amber-600">
               {filteredDonations?.filter((d) => d.isVerified).length}
             </p>
           </CardContent>
@@ -161,7 +176,7 @@ export default function DonationsPage() {
             key={f}
             variant={filter === f ? "default" : "outline"}
             onClick={() => setFilter(f)}
-            className={filter === f ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+            className={filter === f ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
           >
             {f}
           </Button>
@@ -232,7 +247,7 @@ export default function DonationsPage() {
                                 {item.donationType}
                                 {item.weight ? ` - ${item.weight}g` : ""}
                               </div>
-                              <div className="font-semibold text-emerald-600">
+                              <div className="font-semibold text-amber-600">
                                 ₹{item.amount.toLocaleString()}
                               </div>
                             </div>
@@ -247,14 +262,14 @@ export default function DonationsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {donation.isVerified ? (
-                            <CheckCircle className="w-4 h-4 text-emerald-600" />
+                            <CheckCircle className="w-4 h-4 text-green-600" />
                           ) : (
                             <Clock className="w-4 h-4 text-amber-600" />
                           )}
                           <span
                             className={`text-xs px-2 py-1 rounded-full font-medium ${
                               donation.isVerified
-                                ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                                 : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
                             }`}
                           >
@@ -271,16 +286,33 @@ export default function DonationsPage() {
                         <div className="flex justify-end gap-2">
                           {["ADMIN", "ACCOUNTANT"].includes(userRole) &&
                             !donation.isVerified && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 h-8 w-8 p-0"
-                                onClick={() => handleVerify(donation.id)}
-                                disabled={isVerifying === donation.id}
-                                title="Verify Collection"
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700 h-8 w-8 p-0"
+                                    disabled={isVerifying === donation.id}
+                                    title="Verify Collection"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Verify Donation Collection</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to verify this collection? This action will officially register the donations, update balances, and cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleVerify(donation.id)} className="bg-amber-600 hover:bg-amber-700 text-white">
+                                      {isVerifying === donation.id ? "Verifying..." : "Verify Collection"}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             )}
                           <Link href={`/dashboard/donations/${donation.id}`}>
                             <Button variant="outline" size="sm" className="h-8">
@@ -303,7 +335,7 @@ export default function DonationsPage() {
             <p className="text-muted-foreground">No donation collections found</p>
             {userRole !== "ADMIN" && (
               <Link href="/dashboard/donations/new">
-                <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700">
+                <Button className="mt-4 bg-amber-600 hover:bg-amber-700 text-white">
                   Create First Collection
                 </Button>
               </Link>

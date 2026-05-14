@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -53,7 +53,7 @@ interface VoucherDetail {
 export default function VoucherDetailPage() {
   const params = useParams();
   const voucherId = params.id as string;
-
+  const router = useRouter();
   const { data: session } = useSession();
   const userRole = session?.user?.role;
   const [voucher, setVoucher] = useState<VoucherDetail | null>(null);
@@ -123,6 +123,7 @@ export default function VoucherDetailPage() {
 
       if (!response.ok) {
         const data = await response.json();
+        router.back()
         throw new Error(data.error || "Failed to approve voucher");
       }
 

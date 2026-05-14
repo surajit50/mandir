@@ -391,7 +391,7 @@ export function PaymentVoucherForm() {
           "Voucher saved as Draft — awaiting Admin approval. Balance will be updated on approval."
         );
       }
-      router.push(`/dashboard/vouchers/${data.id}`);
+      router.push("/dashboard/vouchers");
     } catch (err) {
       console.error(err);
       toast.error("An unexpected error occurred");
