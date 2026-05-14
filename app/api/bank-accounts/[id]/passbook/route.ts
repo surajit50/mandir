@@ -16,12 +16,11 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
 
     const dateFilter = {
-      gte: startDate ? new Date(startDate) : undefined,
-      lte: endDate ? new Date(endDate) : undefined,
+      lte: endDateParam ? new Date(endDateParam) : undefined,
     };
 
     // ── Fetch the bank account ────────────────────────────────────────
@@ -48,7 +47,7 @@ export async function GET(
     const bankTransactions = await prisma.bankTransaction.findMany({
       where: {
         bankAccountId: accountId,
-        ...(startDate || endDate ? { transactionDate: dateFilter } : {}),
+        ...(endDateParam ? { transactionDate: dateFilter } : {}),
       },
       include: {
         paymentVoucher: { select: { voucherNumber: true, id: true } },
@@ -61,7 +60,7 @@ export async function GET(
       where: {
         accountId,
         status: { in: ["VERIFIED", "PENDING"] },
-        ...(startDate || endDate ? { depositDate: dateFilter } : {}),
+        ...(endDateParam ? { depositDate: dateFilter } : {}),
       },
       orderBy: { depositDate: "asc" },
     });
@@ -72,9 +71,7 @@ export async function GET(
         accountId,
         status: "CLEARED",
         amount: { gt: 0 },
-        ...(startDate || endDate
-          ? { clearedDate: dateFilter }
-          : {}),
+        ...(endDateParam ? { clearedDate: dateFilter } : {}),
       },
       orderBy: { clearedDate: "asc" },
       include: {
@@ -91,17 +88,11 @@ export async function GET(
       clearedCheques.filter((c: any) => c.depositId).map((c: any) => c.depositId!)
     );
 
-    // Voucher IDs already covered by BankTransaction – skip duplicate deposits
-    const coveredVoucherIds = new Set(
-      bankTransactions
-        .filter((bt: any) => bt.paymentVoucher)
-        .map((bt: any) => bt.paymentVoucher!.id)
-    );
-
     // ── Merge all sources into a unified list ─────────────────────────
     type TxRow = {
       id: string;
       date: Date;
+      createdAt: Date;
       description: string;
       creditAmount: number;
       debitAmount: number;
@@ -116,6 +107,7 @@ export async function GET(
       rows.push({
         id: `bt-${bt.id}`,
         date: bt.transactionDate,
+        createdAt: bt.createdAt,
         description: bt.description || "Bank Transaction",
         creditAmount: bt.type === "CREDIT" ? bt.amount : 0,
         debitAmount: bt.type === "DEBIT" ? bt.amount : 0,
@@ -130,6 +122,7 @@ export async function GET(
       rows.push({
         id: `dep-${d.id}`,
         date: d.depositDate,
+        createdAt: d.createdAt,
         description: d.status === "PENDING" 
           ? `[PENDING] ${d.remarks || `Bank Deposit – ${d.depositNumber}`}`
           : d.remarks || `Bank Deposit – ${d.depositNumber}`,
@@ -152,6 +145,7 @@ export async function GET(
       rows.push({
         id: `chq-${c.id}`,
         date: c.clearedDate!,
+        createdAt: c.createdAt,
         description: isReceived
           ? `Cheque #${c.chequeNumber} received from ${receivedFrom}`
           : `Cheque #${c.chequeNumber} issued to ${payeeName}`,
@@ -161,15 +155,31 @@ export async function GET(
       });
     }
 
-    // Sort by date ascending
-    rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Sort by date (day only), then receipts before payments, then createdAt
+    rows.sort((a, b) => {
+      const d1 = new Date(a.date).setHours(0, 0, 0, 0);
+      const d2 = new Date(b.date).setHours(0, 0, 0, 0);
+      if (d1 !== d2) return d1 - d2;
+
+      // Receipts before payments on the same date
+      if (a.creditAmount > 0 && b.debitAmount > 0) return -1;
+      if (a.debitAmount > 0 && b.creditAmount > 0) return 1;
+
+      // Stable sort using creation time
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
 
     // Compute running balance
     let runningBalance = account.openingBalance;
-    const transactions = rows.map((row: any) => {
+    const allTransactions = rows.map((row: any) => {
       runningBalance += row.creditAmount - row.debitAmount;
       return { ...row, balance: runningBalance };
     });
+
+    // Filter by startDate only after running balance is computed
+    const transactions = startDateParam
+      ? allTransactions.filter(tx => new Date(tx.date) >= new Date(startDateParam))
+      : allTransactions;
 
     return NextResponse.json({ account, transactions });
   } catch (error) {
