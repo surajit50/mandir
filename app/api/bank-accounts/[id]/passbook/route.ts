@@ -77,18 +77,25 @@ export async function GET(
           : {}),
       },
       orderBy: { clearedDate: "asc" },
+      include: {
+        paymentVouchers: {
+          take: 1,
+          select: { payee: { select: { name: true } } },
+        },
+        deposit: { select: { remarks: true, depositNumber: true } },
+      },
     });
 
     // Deposit IDs tied to cheque encashments – skip them (avoid double-counting)
     const encashmentDepositIds = new Set(
-      clearedCheques.filter((c) => c.depositId).map((c) => c.depositId!)
+      clearedCheques.filter((c: any) => c.depositId).map((c: any) => c.depositId!)
     );
 
     // Voucher IDs already covered by BankTransaction – skip duplicate deposits
     const coveredVoucherIds = new Set(
       bankTransactions
-        .filter((bt) => bt.paymentVoucher)
-        .map((bt) => bt.paymentVoucher!.id)
+        .filter((bt: any) => bt.paymentVoucher)
+        .map((bt: any) => bt.paymentVoucher!.id)
     );
 
     // ── Merge all sources into a unified list ─────────────────────────
@@ -132,13 +139,20 @@ export async function GET(
 
     // Cleared cheques
     for (const c of clearedCheques) {
-      const isReceived = (c as any).chequeType === "RECEIVED";
+      const isReceived = c.chequeType === "RECEIVED";
+      const payeeName =
+        c.paymentVouchers[0]?.payee?.name ?? "Unknown";
+      const receivedFrom =
+        c.deposit?.remarks?.trim() ||
+        (c.deposit?.depositNumber
+          ? `Deposit ${c.deposit.depositNumber}`
+          : "Unknown");
       rows.push({
         id: `chq-${c.id}`,
         date: c.clearedDate!,
         description: isReceived
-          ? `Cheque #${c.chequeNumber} received from ${(c as any).payerName || "Unknown"}`
-          : `Cheque #${c.chequeNumber} issued to ${c.payeeName}`,
+          ? `Cheque #${c.chequeNumber} received from ${receivedFrom}`
+          : `Cheque #${c.chequeNumber} issued to ${payeeName}`,
         creditAmount: isReceived ? c.amount : 0,
         debitAmount: isReceived ? 0 : c.amount,
         referenceType: "CHEQUE",
