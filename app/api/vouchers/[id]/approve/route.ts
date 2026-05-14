@@ -15,7 +15,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { postTransaction } from "@/lib/accounting/gl-service";
 
 export async function POST(
@@ -45,7 +44,7 @@ export async function POST(
 
     const currentFY = await prisma.financialYear.findFirst({ where: { isCurrent: true } });
 
-    const updatedVoucher = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const updatedVoucher = await prisma.$transaction(async (tx: any) => {
       // ── Fetch full voucher ─────────────────────────────────────────────
       const voucher = await tx.paymentVoucher.findUnique({
         where: { id },

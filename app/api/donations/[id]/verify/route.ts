@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 
 export async function POST(
   request: NextRequest,
@@ -36,7 +35,7 @@ export async function POST(
       where: { isCurrent: true },
     });
 
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const donation = await tx.donationCollection.update({
         where: { id },
         data: {

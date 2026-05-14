@@ -2,7 +2,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const DonationItemSchema = z
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
       0
     );
 
-    const donation = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const donation = await prisma.$transaction(async (tx: any) => {
       const donationCollection = await tx.donationCollection.create({
         data: {
           collectorId: userId,
