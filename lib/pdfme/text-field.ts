@@ -1,4 +1,4 @@
-import type { TextSchema } from "@pdfme/schemas/types";
+type TextSchema = any;
 
 /** Minimal pdfme text schema defaults for server-side PDF generation. */
 export function textField(

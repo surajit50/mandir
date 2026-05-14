@@ -21,6 +21,7 @@ declare module "next-auth/jwt" {
     id: string;
     role: string;
     isActive?: boolean;
+    exp?: number;
   }
 }
 
@@ -103,7 +104,7 @@ export const authOptions: NextAuthOptions = {
 
         // Session destroy if disabled
         if (!dbUser || !dbUser.isActive) {
-          return {};
+          return null as any;
         }
 
         token.role = dbUser.role;
@@ -114,7 +115,7 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (!token?.id) {
-        return null;
+        return null as any;
       }
 
       if (session.user) {

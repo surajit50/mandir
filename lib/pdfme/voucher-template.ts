@@ -149,7 +149,6 @@ type VoucherForPdf = {
   cheque?: {
     chequeNumber: string;
     chequeDate: Date;
-    payeeName: string;
     amount: number;
   } | null;
 };
@@ -178,7 +177,7 @@ export function buildVoucherPdfInputs(v: VoucherForPdf): Record<string, string> 
 
   let chequeLine = "Cheque: —";
   if (v.cheque) {
-    chequeLine = `Cheque: #${v.cheque.chequeNumber} dated ${fmtDate(v.cheque.chequeDate)} · ${v.cheque.payeeName} · ${fmtINR(v.cheque.amount)}`;
+    chequeLine = `Cheque: #${v.cheque.chequeNumber} dated ${fmtDate(v.cheque.chequeDate)} · ${v.payee.name} · ${fmtINR(v.cheque.amount)}`;
   }
 
   let referenceLine = "Reference: —";
