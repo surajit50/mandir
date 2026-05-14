@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { chequePayeeDisplayName } from "@/lib/cheque-payee";
 import { z } from "zod";
 
 const ChequeEncashmentSchema = z.object({
@@ -41,7 +42,13 @@ export async function POST(
     // Find the cheque
     const cheque = await prisma.chequeRegister.findUnique({
       where: { id },
-      include: { account: true },
+      include: {
+        account: true,
+        paymentVouchers: {
+          take: 1,
+          select: { payee: { select: { name: true } } },
+        },
+      },
     });
 
     if (!cheque) {
@@ -90,7 +97,7 @@ export async function POST(
           depositDate: new Date(validatedData.clearedDate),
           totalAmount: cheque.amount,
           depositType: "CHEQUE",
-          remarks: `Cheque #${cheque.chequeNumber} - ${cheque.payeeName} ${validatedData.remarks ? `(${validatedData.remarks})` : ""}`,
+          remarks: `Cheque #${cheque.chequeNumber} - ${chequePayeeDisplayName(cheque)} ${validatedData.remarks ? `(${validatedData.remarks})` : ""}`,
           verifiedByBank: true, // Mark as verified immediately since we are encashing it now
           verifiedAt: new Date(validatedData.clearedDate),
           financialYearId: cheque.financialYearId,

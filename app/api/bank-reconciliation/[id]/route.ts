@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { chequePayeeDisplayName } from "@/lib/cheque-payee";
 
 export async function GET(
   request: NextRequest,
@@ -53,8 +54,11 @@ export async function GET(
           select: {
             id: true,
             chequeNumber: true,
-            payeeName: true,
             chequeDate: true,
+            paymentVouchers: {
+              take: 1,
+              select: { payee: { select: { name: true } } },
+            },
           },
         },
       },
@@ -62,17 +66,20 @@ export async function GET(
     });
 
     // Format deposits as credit entries
-    const creditEntries = allDeposits.map((d) => ({
+    const creditEntries = allDeposits.map((d: any) => ({
       id: d.id,
       date: d.depositDate,
       description: d.remarks || `${d.depositType} Deposit`,
       chequeNumber: d.depositType === "CHEQUE" && d.cheques.length > 0 ? d.cheques[0].chequeNumber : null,
-      payeeName: d.depositType === "CHEQUE" && d.cheques.length > 0 ? d.cheques[0].payeeName : null,
+      payeeName:
+        d.depositType === "CHEQUE" && d.cheques.length > 0
+          ? chequePayeeDisplayName(d.cheques[0])
+          : null,
       amount: d.totalAmount,
       type: "RECEIVED" as const,
       referenceType: "BANK_DEPOSIT",
       depositType: d.depositType,
-    })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Fetch debit entries - issued cheques that are cleared (NOT linked to a deposit)
     const issuedCheques = await prisma.chequeRegister.findMany({
@@ -86,10 +93,16 @@ export async function GET(
         },
       },
       orderBy: { clearedDate: "asc" },
+      include: {
+        paymentVouchers: {
+          take: 1,
+          select: { payee: { select: { name: true } } },
+        },
+      },
     });
 
     // Also fetch outstanding cheques (issued but not yet cleared) for the reconciliation picture
-    // Exclude placeholder/unassigned cheque leaves (amount=0, payee="UNASSIGNED")
+    // Exclude blank leaves (amount = 0)
     const outstandingCheques = await prisma.chequeRegister.findMany({
       where: {
         accountId: reconciliation.accountId,
@@ -97,32 +110,37 @@ export async function GET(
         chequeDate: {
           lte: endDate,
         },
-        payeeName: { not: "UNASSIGNED" },
         amount: { gt: 0 },
       },
       orderBy: { chequeDate: "asc" },
+      include: {
+        paymentVouchers: {
+          take: 1,
+          select: { payee: { select: { name: true } } },
+        },
+      },
     });
 
-    const debitEntries = issuedCheques.map((c) => ({
+    const debitEntries = issuedCheques.map((c: any) => ({
       id: c.id,
       date: c.clearedDate!,
-      description: `Cheque #${c.chequeNumber} - ${c.payeeName}`,
+      description: `Cheque #${c.chequeNumber} - ${chequePayeeDisplayName(c)}`,
       chequeNumber: c.chequeNumber,
-      payeeName: c.payeeName,
+      payeeName: chequePayeeDisplayName(c),
       amount: c.amount,
       type: "ISSUED" as const,
       referenceType: "CHEQUE",
       clearedDate: c.clearedDate,
-    })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const totalCredits = creditEntries.reduce((sum, e) => sum + e.amount, 0);
-    const totalDebits = debitEntries.reduce((sum, e) => sum + e.amount, 0);
+    const totalCredits = creditEntries.reduce((sum: number, e: any) => sum + e.amount, 0);
+    const totalDebits = debitEntries.reduce((sum: number, e: any) => sum + e.amount, 0);
 
     // Format outstanding cheques
-    const outstandingEntries = outstandingCheques.map((c) => ({
+    const outstandingEntries = outstandingCheques.map((c: any) => ({
       id: c.id,
       chequeNumber: c.chequeNumber,
-      payeeName: c.payeeName,
+      payeeName: chequePayeeDisplayName(c),
       amount: c.amount,
       chequeDate: c.chequeDate,
       status: c.status,

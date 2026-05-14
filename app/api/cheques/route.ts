@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { chequePayeeDisplayName } from "@/lib/cheque-payee";
 import { z } from "zod";
 
 const ChequeSchema = z.object({
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: `Cheque numbers already exist: ${existing
-              .map((item) => item.chequeNumber)
+              .map((item: any) => item.chequeNumber)
               .join(", ")}`,
           },
           { status: 400 },
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
 
       const cheques = await prisma.$transaction(async (tx) => {
         await tx.chequeRegister.createMany({
-          data: chequeNumbers.map((chequeNumber) => ({
+          data: chequeNumbers.map((chequeNumber: string) => ({
             chequeNumber,
             chequeBookNumber: validatedBook.chequeBookNumber || null,
             chequeDate,
@@ -243,7 +244,13 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(cheques);
+    return NextResponse.json(
+      cheques.map((c: any) => {
+        const payeeName = chequePayeeDisplayName(c);
+        const { paymentVouchers: _pv, ...rest } = c;
+        return { ...rest, payeeName };
+      }),
+    );
   } catch (error) {
     console.error("Cheques fetch error:", error);
     return NextResponse.json(

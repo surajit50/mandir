@@ -25,13 +25,13 @@ export async function GET(req: NextRequest) {
       orderBy: { accountCode: "asc" },
     });
 
-    const enriched = accounts.map((acc) => ({
+    const enriched = accounts.map((acc: any) => ({
       ...acc,
-      totalDebits: acc.postings.reduce((sum, p) => sum + p.debitAmount, 0),
-      totalCredits: acc.postings.reduce((sum, p) => sum + p.creditAmount, 0),
+      totalDebits: acc.postings.reduce((sum: number, p: any) => sum + p.debitAmount, 0),
+      totalCredits: acc.postings.reduce((sum: number, p: any) => sum + p.creditAmount, 0),
       runningBalance:
         acc.openingBalance +
-        acc.postings.reduce((sum, p) => sum + p.creditAmount - p.debitAmount, 0),
+        acc.postings.reduce((sum: number, p: any) => sum + p.creditAmount - p.debitAmount, 0),
     }));
 
     return NextResponse.json(enriched);

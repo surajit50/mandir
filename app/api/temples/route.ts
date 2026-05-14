@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const temples = templeUsers.map((tu) => tu.temple);
+    const temples = templeUsers.map((tu: { temple: any }) => tu.temple);
 
     // For ADMIN, show all temples
     if (session.user.role === "ADMIN") {

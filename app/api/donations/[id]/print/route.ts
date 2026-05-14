@@ -39,14 +39,14 @@ export async function GET(
       isVerified: donation.isVerified,
       status: donation.status,
       remarks: donation.remarks,
-      donationItems: donation.donationItems.map((i) => ({
+      donationItems: donation.donationItems.map((i: any) => ({
         donorName: i.donorName,
         amount: i.amount,
         donationType: i.donationType,
         weight: i.weight,
         description: i.description,
       })),
-      jewelleryAssets: donation.jewelleryAssets.map((j) => ({
+      jewelleryAssets: donation.jewelleryAssets.map((j: any) => ({
         jewelleryCode: j.jewelleryCode,
         jewelleryName: j.jewelleryName,
         metalType: j.metalType,

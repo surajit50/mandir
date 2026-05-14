@@ -19,13 +19,13 @@ export async function GET(req: NextRequest) {
       orderBy: { festivalDate: "desc" },
     });
 
-    const enriched = festivals.map((festival) => {
+    const enriched = festivals.map((festival: any) => {
       const income = festival.festivalTransactions
-        .filter((t) => t.transactionType === "Income")
-        .reduce((sum, t) => sum + t.amount, 0);
+        .filter((t: any) => t.transactionType === "Income")
+        .reduce((sum: number, t: any) => sum + t.amount, 0);
       const expense = festival.festivalTransactions
-        .filter((t) => t.transactionType === "Expense")
-        .reduce((sum, t) => sum + t.amount, 0);
+        .filter((t: any) => t.transactionType === "Expense")
+        .reduce((sum: number, t: any) => sum + t.amount, 0);
 
       return {
         ...festival,

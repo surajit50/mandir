@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate running balance on the fly to ensure accuracy
     let runningBalance = 0;
-    const normalizedEntries = entries.map((entry) => {
+    const normalizedEntries = entries.map((entry: any) => {
       // In MemberCashLedger:
       // creditAmount is when member collects money (increases their cash in hand)
       // debitAmount is when member hands over money (decreases their cash in hand)

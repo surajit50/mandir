@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         where: { id: { in: validatedData.chequeIds } },
         select: { amount: true },
       });
-      chequeTotal = linkedCheques.reduce((sum, cheque) => sum + cheque.amount, 0);
+      chequeTotal = linkedCheques.reduce((sum: number, cheque: any) => sum + cheque.amount, 0);
     }
     const cashPortion = Math.max(0, validatedData.totalAmount - chequeTotal);
 
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
           status: "PENDING",
           financialYearId: currentFY?.id,
           cheques: {
-            connect: (validatedData.chequeIds || []).map((id) => ({ id })),
+            connect: (validatedData.chequeIds || []).map((id: string) => ({ id })),
           },
         },
         include: {

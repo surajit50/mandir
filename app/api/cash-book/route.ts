@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const handoverEntries = approvedHandovers.map((handover) => ({
+    const handoverEntries = approvedHandovers.map((handover: any) => ({
       id: `handover-${handover.id}`,
       date: handover.approvedAt ?? new Date(),
       description: `Cash Handover - ${handover.handoverFromUser.name}`,
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     });
 
     let runningBalance = 0;
-    const normalizedEntries = mergedEntries.map((entry) => {
+    const normalizedEntries = mergedEntries.map((entry: any) => {
       runningBalance += (entry.creditAmount || 0) - (entry.debitAmount || 0);
       return {
         ...entry,

@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
           status: "PENDING",
           financialYearId: currentFY?.id,
           reconciliationItems: {
-            create: (validatedData.reconciliationItems || []).map((item) => ({
+            create: (validatedData.reconciliationItems || []).map((item: any) => ({
               itemType: item.itemType,
               amount: item.amount,
               description: item.description,

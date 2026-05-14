@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     // Optionally filter low stock items in-memory for performance
     const result = lowStock
-      ? items.filter((item) => item.quantity <= item.reorderLevel)
+      ? items.filter((item: any) => item.quantity <= item.reorderLevel)
       : items;
 
     return NextResponse.json(result);

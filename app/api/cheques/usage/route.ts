@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { chequePayeeDisplayName } from '@/lib/cheque-payee';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,16 +31,19 @@ export async function GET(request: NextRequest) {
         id: true,
         chequeNumber: true,
         status: true,
-        payeeName: true,
         amount: true,
         chequeDate: true,
+        paymentVouchers: {
+          take: 1,
+          select: { payee: { select: { name: true } } },
+        },
       },
       orderBy: { chequeNumber: 'asc' },
     });
 
     // Build a set of used cheque numbers
-    const usedNumbers = new Map(
-      allCheques.map((c) => [c.chequeNumber, c])
+    const usedNumbers = new Map<string, any>(
+      allCheques.map((c: any) => [c.chequeNumber, c])
     );
 
     // Generate the full range (as strings, padded if needed)
@@ -68,7 +72,7 @@ export async function GET(request: NextRequest) {
         chequeNumber: numStr,
         used: !!existing,
         status: existing?.status,
-        payee: existing?.payeeName,
+        payee: existing ? chequePayeeDisplayName(existing) : undefined,
         amount: existing?.amount,
         date: existing?.chequeDate?.toISOString(),
         id: existing?.id,

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     });
 
     const totalAmount = validatedData.donationItems.reduce(
-      (sum, item) => sum + (item.amount || 0),
+      (sum: number, item: any) => sum + (item.amount || 0),
       0
     );
 
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
           status: "DRAFT",
           financialYearId: currentFY?.id,
           donationItems: {
-            create: validatedData.donationItems.map((item) => ({
+            create: validatedData.donationItems.map((item: { donorName: string, amount?: number, donationType: any, weight?: number, description?: string }) => ({
               donorName: item.donorName,
               amount: item.amount || 0,
               donationType: item.donationType,

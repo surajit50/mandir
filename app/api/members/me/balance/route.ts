@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const totalCredits = ledgerEntries.reduce((sum, entry) => sum + entry.creditAmount, 0);
-    const totalDebits = ledgerEntries.reduce((sum, entry) => sum + entry.debitAmount, 0);
+    const totalCredits = ledgerEntries.reduce((sum: number, entry: any) => sum + entry.creditAmount, 0);
+    const totalDebits = ledgerEntries.reduce((sum: number, entry: any) => sum + entry.debitAmount, 0);
     const balance = totalCredits - totalDebits;
 
     // Alternative: Calculate directly from source tables to ensure accuracy if ledger is inconsistent

@@ -85,7 +85,7 @@ export async function POST(
         });
         if (linkedCheques.length > 0) {
           await tx.chequeRegister.updateMany({
-            where: { id: { in: linkedCheques.map((c) => c.id) } },
+            where: { id: { in: linkedCheques.map((c: any) => c.id) } },
             data: { 
               status: "CLEARED",
               clearedDate: new Date(),
