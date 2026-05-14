@@ -21,7 +21,7 @@ export async function postTransaction(
   // Validate balancing
   const totalDebit = params.entries.reduce((sum, e) => sum + (e.debit || 0), 0);
   const totalCredit = params.entries.reduce((sum, e) => sum + (e.credit || 0), 0);
-  
+
   if (Math.abs(totalDebit - totalCredit) > 0.01) {
     throw new Error(`GL Transaction not balanced. Debit: ${totalDebit}, Credit: ${totalCredit}`);
   }
