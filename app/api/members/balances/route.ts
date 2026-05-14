@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // For each member, calculate balance
     // Using direct aggregate for accuracy as discussed in me/balance
     const memberBalances = await Promise.all(
-      members.map(async (member) => {
+      members.map(async (member: any) => {
         const [donations, handovers] = await Promise.all([
           prisma.donationCollection.aggregate({
             where: {

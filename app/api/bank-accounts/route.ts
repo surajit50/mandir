@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
     });
 
     const enrichedAccounts = await Promise.all(
-      bankAccounts.map(async (account) => {
+      bankAccounts.map(async (account: any) => {
         const pendingVouchers = await prisma.paymentVoucher.aggregate({
           where: {
             bankAccountId: account.id,

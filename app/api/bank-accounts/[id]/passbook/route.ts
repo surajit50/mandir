@@ -164,7 +164,7 @@ export async function GET(
 
     // Compute running balance
     let runningBalance = account.openingBalance;
-    const transactions = rows.map((row) => {
+    const transactions = rows.map((row: any) => {
       runningBalance += row.creditAmount - row.debitAmount;
       return { ...row, balance: runningBalance };
     });
