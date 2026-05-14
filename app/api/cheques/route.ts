@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const cheques = await prisma.$transaction(async (tx) => {
+      const cheques = await prisma.$transaction(async (tx: any) => {
         await tx.chequeRegister.createMany({
           data: chequeNumbers.map((chequeNumber: string) => ({
             chequeNumber,
