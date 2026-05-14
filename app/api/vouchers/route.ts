@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { PaymentVoucherSchema } from "@/lib/validations/accounting";
 
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       data.bankAccountId &&
       INSTANT_POST_RECEIPT_CATEGORIES.includes(data.category ?? "");
 
-    const voucher = await prisma.$transaction(async (tx) => {
+    const voucher = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Create the voucher (always starts as DRAFT unless instant-receipt)
       const v = await tx.paymentVoucher.create({
         data: {
