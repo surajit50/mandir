@@ -5,6 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import { ColumnDef } from "@tanstack/react-table";
 
 import {
   Card,
@@ -14,15 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Plus, Eye, CheckCircle, Clock, CheckCircle2, Users, Wallet, CheckCheck, Trash2 } from "lucide-react";
+import { DataTable } from "@/components/ui/data-table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
@@ -43,6 +36,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Plus,
+  Eye,
+  CheckCircle,
+  Clock,
+  CheckCircle2,
+  Users,
+  Wallet,
+  CheckCheck,
+  Trash2,
+} from "lucide-react";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -84,23 +88,19 @@ export default function DonationsPage() {
 
   const [isVerifying, setIsVerifying] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [filter, setFilter] = useState("ALL");
 
   const handleDelete = async (id: string) => {
     try {
       setIsDeleting(id);
-      const res = await fetch(`/api/donations/${id}`, {
-        method: "DELETE",
-      });
-
+      const res = await fetch(`/api/donations/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || "Failed to delete donation");
       }
-
       toast.success("Donation deleted successfully");
       mutate();
     } catch (error: any) {
-      console.error(error);
       toast.error(error.message || "Error deleting donation");
     } finally {
       setIsDeleting(null);
@@ -112,23 +112,66 @@ export default function DonationsPage() {
       setIsVerifying(id);
       const res = await fetch(`/api/donations/${id}/verify`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ verify: true }),
       });
       if (!res.ok) throw new Error("Failed to verify donation");
       toast.success("Donation verified successfully");
       mutate();
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("Error verifying donation");
     } finally {
       setIsVerifying(null);
     }
   };
 
-  const [filter, setFilter] = useState("ALL");
+  const pendingDonations = donations?.filter((d) => !d.isVerified) || [];
+  const pendingByMember = pendingDonations.reduce(
+    (acc, donation) => {
+      const memberId = donation.collector.id;
+      if (!acc[memberId]) {
+        acc[memberId] = { member: donation.collector, totalAmount: 0, collections: [] };
+      }
+      acc[memberId].totalAmount += donation.totalAmount;
+      acc[memberId].collections.push(donation);
+      return acc;
+    },
+    {} as Record<
+      string,
+      {
+        member: { id: string; name: string; email: string };
+        totalAmount: number;
+        collections: DonationCollection[];
+      }
+    >
+  );
+  const pendingMembersList = Object.values(pendingByMember);
+
+  const handleVerifyMember = async (
+    memberId: string,
+    collections: DonationCollection[]
+  ) => {
+    try {
+      setIsVerifying(memberId);
+      await Promise.all(
+        collections.map((c) =>
+          fetch(`/api/donations/${c.id}/verify`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ verify: true }),
+          }).then((res) => {
+            if (!res.ok) throw new Error("Failed to verify");
+          })
+        )
+      );
+      toast.success(`Verified ${collections.length} collections successfully`);
+      mutate();
+    } catch {
+      toast.error("Error verifying some collections");
+    } finally {
+      setIsVerifying(null);
+    }
+  };
 
   const filteredDonations = donations?.filter((d) => {
     if (filter === "VERIFIED") return d.isVerified;
@@ -139,57 +182,249 @@ export default function DonationsPage() {
   const totalCollection =
     filteredDonations?.reduce((sum, item) => sum + item.totalAmount, 0) || 0;
 
-  const pendingDonations = donations?.filter((d) => !d.isVerified) || [];
-
-  const pendingByMember = pendingDonations.reduce((acc, donation) => {
-    const memberId = donation.collector.id;
-    if (!acc[memberId]) {
-      acc[memberId] = {
-        member: donation.collector,
-        totalAmount: 0,
-        collections: [],
-      };
-    }
-    acc[memberId].totalAmount += donation.totalAmount;
-    acc[memberId].collections.push(donation);
-    return acc;
-  }, {} as Record<string, { member: { id: string; name: string; email: string }; totalAmount: number; collections: DonationCollection[] }>);
-
-  const pendingMembersList = Object.values(pendingByMember);
-
-  const handleVerifyMember = async (memberId: string, collections: DonationCollection[]) => {
-    try {
-      setIsVerifying(memberId);
-      const promises = collections.map(c => 
-        fetch(`/api/donations/${c.id}/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ verify: true }),
-        }).then(res => {
-          if (!res.ok) throw new Error("Failed to verify");
-          return res;
-        })
-      );
-      
-      await Promise.all(promises);
-      toast.success(`Verified ${collections.length} collections successfully`);
-      mutate();
-    } catch (error) {
-      console.error(error);
-      toast.error("Error verifying some collections");
-    } finally {
-      setIsVerifying(null);
-    }
-  };
+  // ── Column definitions ──────────────────────────────────────────────────────
+  const columns: ColumnDef<DonationCollection>[] = [
+    {
+      id: "collector",
+      accessorFn: (row) => row.collector.name,
+      header: "Collector",
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium text-foreground">{row.original.collector.name}</p>
+          <p className="text-xs text-muted-foreground">{row.original.collector.email}</p>
+        </div>
+      ),
+    },
+    {
+      id: "collectionDate",
+      accessorKey: "collectionDate",
+      header: "Date",
+      cell: ({ getValue }) =>
+        new Date(getValue<string>()).toLocaleDateString("en-IN"),
+    },
+    {
+      id: "totalAmount",
+      accessorKey: "totalAmount",
+      header: "Total Amount",
+      cell: ({ getValue }) => (
+        <span className="font-semibold text-foreground">
+          ₹{getValue<number>().toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      id: "items",
+      header: "Donors",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const donation = row.original;
+        return (
+          <Dialog>
+            <DialogTrigger asChild>
+              <div className="space-y-1 min-w-[200px] cursor-pointer hover:bg-muted/50 p-1.5 rounded-md transition-colors border border-transparent hover:border-amber-200 dark:hover:border-amber-800 group">
+                {donation.donationItems.slice(0, 2).map((item) => (
+                  <div key={item.id} className="text-xs border rounded px-2 py-1 bg-muted">
+                    <div className="font-medium">{item.donorName}</div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">
+                        {item.donationType}
+                        {item.weight ? ` – ${item.weight}g` : ""}
+                      </span>
+                      <span className="font-semibold text-amber-600">
+                        ₹{item.amount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground group-hover:text-amber-600 font-medium pt-1 text-center">
+                  {donation.donationItems.length > 2
+                    ? `+${donation.donationItems.length - 2} more (Click to view)`
+                    : "Click to view all details"}
+                </p>
+              </div>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl max-h-[80vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Donor Details</DialogTitle>
+                <DialogDescription>
+                  Collection from{" "}
+                  {new Date(donation.collectionDate).toLocaleDateString()} by{" "}
+                  {donation.collector.name}
+                </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="flex-1 pr-4 mt-2">
+                <div className="space-y-3">
+                  {donation.donationItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex justify-between items-start border p-3 rounded-lg bg-card shadow-sm"
+                    >
+                      <div>
+                        <p className="font-medium text-sm text-foreground">
+                          {item.donorName}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          <span className="font-medium text-amber-700 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded mr-1.5">
+                            {item.donationType}
+                          </span>
+                          {item.weight ? `${item.weight}g` : ""}
+                        </p>
+                        {item.description && (
+                          <p className="text-xs text-muted-foreground italic mt-2 bg-muted/50 p-2 rounded border-l-2 border-amber-400">
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
+                      <p className="font-semibold text-amber-600">
+                        ₹{item.amount.toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              <div className="flex justify-end pt-4 border-t mt-4">
+                <p className="font-bold text-lg text-foreground">
+                  Total:{" "}
+                  <span className="text-amber-600">
+                    ₹{donation.totalAmount.toLocaleString()}
+                  </span>
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      },
+    },
+    {
+      id: "status",
+      accessorKey: "isVerified",
+      header: "Status",
+      cell: ({ getValue }) => {
+        const verified = getValue<boolean>();
+        return (
+          <span
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium border w-fit ${
+              verified
+                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+            }`}
+          >
+            {verified ? (
+              <CheckCircle className="w-3.5 h-3.5" />
+            ) : (
+              <Clock className="w-3.5 h-3.5" />
+            )}
+            {verified ? "Verified" : "Pending"}
+          </span>
+        );
+      },
+    },
+    {
+      id: "remarks",
+      accessorKey: "remarks",
+      header: "Remarks",
+      cell: ({ getValue }) => (
+        <p className="text-sm text-muted-foreground truncate max-w-[180px]">
+          {getValue<string>() || "–"}
+        </p>
+      ),
+    },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => {
+        const donation = row.original;
+        return (
+          <div className="flex justify-end gap-2">
+            {["ADMIN", "ACCOUNTANT"].includes(userRole) && !donation.isVerified && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700 h-8 w-8 p-0"
+                    disabled={isVerifying === donation.id}
+                    title="Verify Collection"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Verify Donation Collection</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to verify this collection? This action will
+                      officially register the donations, update balances, and cannot be
+                      undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleVerify(donation.id)}
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      {isVerifying === donation.id ? "Verifying…" : "Verify Collection"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <Link href={`/dashboard/donations/${donation.id}`}>
+              <Button variant="outline" size="sm" className="h-8">
+                <Eye className="w-4 h-4 mr-2" />
+                View
+              </Button>
+            </Link>
+            {!donation.isVerified &&
+              (userRole === "ADMIN" ||
+                donation.collector.id === session?.user?.id) && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/20 hover:bg-destructive/10 h-8 w-8 p-0"
+                      disabled={isDeleting === donation.id}
+                      title="Delete Collection"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Donation Collection</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete this collection? This action will
+                        permanently remove the donation records and cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(donation.id)}
+                        className="bg-destructive hover:bg-destructive/90 text-white"
+                      >
+                        {isDeleting === donation.id ? "Deleting…" : "Delete Collection"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            Donation Collections
-          </h1>
+          <h1 className="text-2xl font-bold text-foreground">Donation Collections</h1>
           <p className="text-muted-foreground mt-1">
             Manage and verify donation collections
           </p>
@@ -204,9 +439,8 @@ export default function DonationsPage() {
         )}
       </div>
 
-      {/* Summary */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Total Amount Card - Emphasized */}
         <Card className="md:col-span-1 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 shadow-sm relative overflow-hidden">
           <div className="absolute right-0 top-0 w-24 h-24 bg-amber-500/10 rounded-bl-full -z-10" />
           <CardHeader className="pb-2">
@@ -225,7 +459,6 @@ export default function DonationsPage() {
           </CardContent>
         </Card>
 
-        {/* Total Collections Card */}
         <Card className="shadow-sm relative overflow-hidden group">
           <div className="absolute right-0 top-0 w-16 h-16 bg-muted rounded-bl-full -z-10 group-hover:scale-110 transition-transform" />
           <CardHeader className="pb-2">
@@ -241,7 +474,6 @@ export default function DonationsPage() {
           </CardContent>
         </Card>
 
-        {/* Verified Collections Card */}
         <Card className="shadow-sm relative overflow-hidden group">
           <div className="absolute right-0 top-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full -z-10 group-hover:scale-110 transition-transform" />
           <CardHeader className="pb-2">
@@ -279,9 +511,7 @@ export default function DonationsPage() {
                     className="flex items-center justify-between border border-amber-100 dark:border-amber-900/50 rounded-lg p-4 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md hover:border-amber-300 dark:hover:border-amber-700 transition-all duration-200 group"
                   >
                     <div>
-                      <p className="font-medium text-sm text-foreground">
-                        {member.name}
-                      </p>
+                      <p className="font-medium text-sm text-foreground">{member.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {collections.length} collection(s) pending
                       </p>
@@ -289,7 +519,6 @@ export default function DonationsPage() {
                         ₹{totalAmount.toLocaleString()}
                       </p>
                     </div>
-
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -298,7 +527,9 @@ export default function DonationsPage() {
                           className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                           disabled={isVerifying === member.id}
                         >
-                          {isVerifying === member.id ? "Verifying..." : (
+                          {isVerifying === member.id ? (
+                            "Verifying…"
+                          ) : (
                             <>
                               <CheckCheck className="w-4 h-4 mr-2" />
                               Verify All
@@ -308,46 +539,65 @@ export default function DonationsPage() {
                       </AlertDialogTrigger>
                       <AlertDialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Verify Collections for {member.name}?</AlertDialogTitle>
+                          <AlertDialogTitle>
+                            Verify Collections for {member.name}?
+                          </AlertDialogTitle>
                           <AlertDialogDescription>
-                            Review the {collections.length} collection(s) and all donors before confirming. This action cannot be undone.
+                            Review the {collections.length} collection(s) and all donors
+                            before confirming. This action cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
-
                         <ScrollArea className="flex-1 pr-4 my-2 border rounded-md">
                           <div className="p-4 space-y-6">
                             {collections.map((col, idx) => (
                               <div key={col.id} className="space-y-3">
                                 <div className="flex items-center justify-between pb-2 border-b">
-                                  <h4 className="font-semibold text-sm text-foreground">Collection {idx + 1}</h4>
+                                  <h4 className="font-semibold text-sm text-foreground">
+                                    Collection {idx + 1}
+                                  </h4>
                                   <div className="text-xs text-muted-foreground">
                                     {new Date(col.collectionDate).toLocaleDateString()}
                                   </div>
                                 </div>
                                 <div className="space-y-2 pl-2 border-l-2 border-amber-200">
-                                  {col.donationItems.map(item => (
-                                    <div key={item.id} className="flex justify-between items-center text-sm">
+                                  {col.donationItems.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="flex justify-between items-center text-sm"
+                                    >
                                       <div>
-                                        <span className="font-medium text-foreground">{item.donorName}</span>
+                                        <span className="font-medium text-foreground">
+                                          {item.donorName}
+                                        </span>
                                         <span className="text-xs text-muted-foreground ml-2 px-1.5 py-0.5 rounded bg-muted">
-                                          {item.donationType} {item.weight ? `(${item.weight}g)` : ""}
+                                          {item.donationType}{" "}
+                                          {item.weight ? `(${item.weight}g)` : ""}
                                         </span>
                                       </div>
-                                      <span className="font-semibold text-amber-600">₹{item.amount.toLocaleString()}</span>
+                                      <span className="font-semibold text-amber-600">
+                                        ₹{item.amount.toLocaleString()}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
                                 <div className="flex justify-end pt-1">
-                                  <span className="text-sm font-medium">Subtotal: <span className="text-foreground">₹{col.totalAmount.toLocaleString()}</span></span>
+                                  <span className="text-sm font-medium">
+                                    Subtotal:{" "}
+                                    <span className="text-foreground">
+                                      ₹{col.totalAmount.toLocaleString()}
+                                    </span>
+                                  </span>
                                 </div>
                               </div>
                             ))}
                           </div>
                         </ScrollArea>
-
                         <AlertDialogFooter className="items-center mt-2 border-t pt-4 sm:justify-between flex-row">
                           <div className="text-lg font-bold text-foreground mb-2 sm:mb-0">
-                            Total to Verify: <span className="text-amber-600">₹{totalAmount.toLocaleString()}</span>
+                            Total to Verify:{" "}
+                            <span className="text-amber-600">
+                              ₹{totalAmount.toLocaleString()}
+                            </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <AlertDialogCancel className="mt-0">Cancel</AlertDialogCancel>
@@ -369,254 +619,59 @@ export default function DonationsPage() {
         </Card>
       )}
 
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {["ALL", "VERIFIED", "PENDING"].map((f) => (
-          <Button
-            key={f}
-            variant={filter === f ? "default" : "outline"}
-            onClick={() => setFilter(f)}
-            className={filter === f ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
-          >
-            {f}
-          </Button>
-        ))}
-      </div>
-
-      {/* Loading */}
-      {isLoading ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <p className="text-muted-foreground">Loading donations...</p>
-          </CardContent>
-        </Card>
-      ) : error ? (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="py-10 text-center">
-            <p className="text-destructive">Error loading donations</p>
-          </CardContent>
-        </Card>
-      ) : filteredDonations && filteredDonations.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Donation Collections</CardTitle>
-            <CardDescription>All donation collection entries</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Collector</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Total Amount</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Remarks</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredDonations.map((donation) => (
-                    <TableRow key={donation.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {donation.collector.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {donation.collector.email}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(donation.collectionDate).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="font-semibold text-foreground">
-                        ₹{donation.totalAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <div className="space-y-1 min-w-[220px] cursor-pointer hover:bg-muted/50 p-1.5 rounded-md transition-colors border border-transparent hover:border-amber-200 dark:hover:border-amber-800 group">
-                              {donation.donationItems.slice(0, 2).map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="text-xs border rounded px-2 py-1 bg-muted"
-                                >
-                                  <div className="font-medium">{item.donorName}</div>
-                                  <div className="flex justify-between items-center">
-                                    <div className="text-muted-foreground">
-                                      {item.donationType}
-                                      {item.weight ? ` - ${item.weight}g` : ""}
-                                    </div>
-                                    <div className="font-semibold text-amber-600">
-                                      ₹{item.amount.toLocaleString()}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                              <p className="text-xs text-muted-foreground group-hover:text-amber-600 font-medium pt-1 text-center">
-                                {donation.donationItems.length > 2 
-                                  ? `+${donation.donationItems.length - 2} more items (Click to view)` 
-                                  : `Click to view all details`}
-                              </p>
-                            </div>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-xl max-h-[80vh] flex flex-col">
-                            <DialogHeader>
-                              <DialogTitle>Donor Details</DialogTitle>
-                              <DialogDescription>
-                                Collection from {new Date(donation.collectionDate).toLocaleDateString()} by {donation.collector.name}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <ScrollArea className="flex-1 pr-4 mt-2">
-                              <div className="space-y-3">
-                                {donation.donationItems.map((item) => (
-                                  <div key={item.id} className="flex justify-between items-start border p-3 rounded-lg bg-card shadow-sm">
-                                    <div>
-                                      <p className="font-medium text-sm text-foreground">{item.donorName}</p>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        <span className="font-medium text-amber-700 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded mr-1.5">{item.donationType}</span>
-                                        {item.weight ? `${item.weight}g` : ""}
-                                      </p>
-                                      {item.description && (
-                                        <p className="text-xs text-muted-foreground italic mt-2 bg-muted/50 p-2 rounded border-l-2 border-amber-400">
-                                          {item.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <p className="font-semibold text-amber-600">₹{item.amount.toLocaleString()}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                            <div className="flex justify-end pt-4 border-t mt-4">
-                               <p className="font-bold text-lg text-foreground">
-                                 Total: <span className="text-amber-600">₹{donation.totalAmount.toLocaleString()}</span>
-                               </p>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium border ${
-                              donation.isVerified
-                                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
-                                : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
-                            }`}
-                          >
-                            {donation.isVerified ? (
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            ) : (
-                              <Clock className="w-3.5 h-3.5" />
-                            )}
-                            {donation.isVerified ? "Verified" : "Pending"}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[200px]">
-                        <p className="text-sm text-muted-foreground truncate">
-                          {donation.remarks || "-"}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          {["ADMIN", "ACCOUNTANT"].includes(userRole) &&
-                            !donation.isVerified && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700 h-8 w-8 p-0"
-                                    disabled={isVerifying === donation.id}
-                                    title="Verify Collection"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Verify Donation Collection</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to verify this collection? This action will officially register the donations, update balances, and cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleVerify(donation.id)} className="bg-amber-600 hover:bg-amber-700 text-white">
-                                      {isVerifying === donation.id ? "Verifying..." : "Verify Collection"}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                              <Link href={`/dashboard/donations/${donation.id}`}>
-                                <Button variant="outline" size="sm" className="h-8">
-                                  <Eye className="w-4 h-4 mr-2" />
-                                  View
-                                </Button>
-                              </Link>
-
-                              {(!donation.isVerified && (userRole === "ADMIN" || donation.collector.id === session?.user?.id)) && (
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-destructive border-destructive/20 hover:bg-destructive/10 h-8 w-8 p-0"
-                                      disabled={isDeleting === donation.id}
-                                      title="Delete Collection"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Donation Collection</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to delete this collection? This action will permanently remove the donation records and cannot be undone.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction 
-                                        onClick={() => handleDelete(donation.id)} 
-                                        className="bg-destructive hover:bg-destructive/90 text-white"
-                                      >
-                                        {isDeleting === donation.id ? "Deleting..." : "Delete Collection"}
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              )}
-                            </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+      {/* Main Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Donation Collections</CardTitle>
+          <CardDescription>All donation collection entries</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="py-16 text-center text-muted-foreground">
+              Loading donations…
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <p className="text-muted-foreground">No donation collections found</p>
-            {userRole !== "ADMIN" && (
-              <Link href="/dashboard/donations/new">
-                <Button className="mt-4 bg-amber-600 hover:bg-amber-700 text-white">
-                  Create First Collection
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          ) : error ? (
+            <div className="py-10 text-center text-destructive">
+              Error loading donations
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={filteredDonations ?? []}
+              searchPlaceholder="Search collector, remarks…"
+              toolbarRight={
+                <div className="flex flex-wrap gap-2">
+                  {["ALL", "VERIFIED", "PENDING"].map((f) => (
+                    <Button
+                      key={f}
+                      variant={filter === f ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilter(f)}
+                      className={
+                        filter === f ? "bg-amber-600 hover:bg-amber-700 text-white h-9" : "h-9"
+                      }
+                    >
+                      {f}
+                    </Button>
+                  ))}
+                </div>
+              }
+              emptyState={
+                <div className="py-8">
+                  <p className="text-muted-foreground">No donation collections found</p>
+                  {userRole !== "ADMIN" && (
+                    <Link href="/dashboard/donations/new">
+                      <Button className="mt-4 bg-amber-600 hover:bg-amber-700 text-white">
+                        Create First Collection
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              }
+            />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

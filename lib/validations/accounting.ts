@@ -75,6 +75,7 @@ export const BankDepositSchema = z.object({
   totalAmount: z.coerce.number().positive("Amount must be greater than 0"),
   depositType: z.enum(["CASH", "CHEQUE", "MIXED"]),
   chequeIds: z.array(z.string()).optional().default([]),
+  handoverIds: z.array(z.string()).optional().default([]),
   remarks: z.string().optional(),
 });
 export type BankDepositFormValues = z.infer<typeof BankDepositSchema>;

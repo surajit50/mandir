@@ -1,11 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Users, Mail, Phone } from 'lucide-react';
-import { useSession } from 'next-auth/react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ColumnDef } from "@tanstack/react-table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
+import { AlertCircle, Users, Mail, Phone, Plus } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 interface Payee {
   id: string;
@@ -28,29 +31,90 @@ export default function PayeesPage() {
   const fetchPayees = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/payees');
-      if (!res.ok) throw new Error('Failed to fetch payees');
+      const res = await fetch("/api/payees");
+      if (!res.ok) throw new Error("Failed to fetch payees");
       const data = await res.json();
       setPayees(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error fetching payees');
+      setError(err instanceof Error ? err.message : "Error fetching payees");
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Column Definitions ───────────────────────────────────────────────────────
+  const columns: ColumnDef<Payee>[] = [
+    {
+      id: "name",
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ getValue }) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+            <Users className="w-4 h-4 text-amber-600" />
+          </div>
+          <span className="font-medium text-foreground">{getValue<string>()}</span>
+        </div>
+      ),
+    },
+    {
+      id: "payeeType",
+      accessorKey: "payeeType",
+      header: "Type",
+      cell: ({ getValue }) => (
+        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-700 text-xs font-semibold uppercase tracking-wide">
+          {(getValue<string>() || "OTHER").replace(/_/g, " ")}
+        </Badge>
+      ),
+    },
+    {
+      id: "email",
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ getValue }) => {
+        const val = getValue<string | null>();
+        return val ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Mail className="w-4 h-4 shrink-0" />
+            {val}
+          </div>
+        ) : (
+          <span className="text-muted-foreground/50 text-xs">—</span>
+        );
+      },
+    },
+    {
+      id: "phone",
+      accessorKey: "phone",
+      header: "Phone",
+      cell: ({ getValue }) => {
+        const val = getValue<string | null>();
+        return val ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Phone className="w-4 h-4 shrink-0" />
+            {val}
+          </div>
+        ) : (
+          <span className="text-muted-foreground/50 text-xs">—</span>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Payees & Contacts</h1>
-          <p className="text-muted-foreground mt-1">Manage all registered vendors and contacts</p>
+          <h1 className="text-2xl font-bold text-foreground">Payees &amp; Contacts</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage all registered vendors and contacts
+          </p>
         </div>
         {session?.user?.role !== "MEMBER" && (
           <Link href="/dashboard/payees/new">
-            <Button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700">
-              <Users className="w-4 h-4" />
+            <Button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white">
+              <Plus className="w-4 h-4" />
               New Contact
             </Button>
           </Link>
@@ -72,39 +136,19 @@ export default function PayeesPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p>Loading payees...</p>
-          ) : payees.length === 0 ? (
-            <p className="text-muted-foreground">No payees found.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {payees.map((payee) => (
-                <Card key={payee.id} className="border-amber-200">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                        <Users className="w-5 h-5 text-amber-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-amber-900">{payee.name}</h3>
-                        <p className="text-xs text-amber-600 font-medium uppercase tracking-wider">{payee.payeeType || "OTHER"}</p>
-                      </div>
-                    </div>
-                    {payee.email && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-3">
-                        <Mail className="w-4 h-4" />
-                        {payee.email}
-                      </div>
-                    )}
-                    {payee.phone && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                        <Phone className="w-4 h-4" />
-                        {payee.phone}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="py-16 text-center text-muted-foreground">
+              Loading payees…
             </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={payees}
+              searchPlaceholder="Search by name, email…"
+              searchKey="name"
+              emptyState={
+                <p className="text-muted-foreground py-4">No payees found.</p>
+              }
+            />
           )}
         </CardContent>
       </Card>

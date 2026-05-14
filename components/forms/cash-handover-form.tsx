@@ -36,7 +36,7 @@ import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 
-const DENOMINATIONS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
+const DENOMINATIONS = [500, 200, 100, 50, 20, 10, 5, 2, 1];
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export function CashHandoverForm() {

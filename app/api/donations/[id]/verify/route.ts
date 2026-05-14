@@ -52,27 +52,11 @@ export async function POST(
       });
 
       if (isVerifying) {
-        // Cash book entry
-        const existingEntry = await tx.cashBook.findFirst({
-          where: { donationCollectionId: id },
-        });
-
-        if (!existingEntry) {
-          await tx.cashBook.create({
-            data: {
-              date: new Date(),
-              description: `Donation Collection - ${donation.collector.name}`,
-              creditAmount: donation.totalAmount,
-              balance: 0,
-              referenceType: "DonationCollection",
-              referenceId: id,
-              donationCollectionId: id,
-              financialYearId: currentFY?.id,
-            },
-          });
-        }
-
-        // Member cash ledger entry
+        // NOTE: We no longer post DonationCollections to the Main Cash Book here.
+        // The cash is still in the collector's custody. 
+        // It will only enter the Main Cash Book when a 'CashHandover' is approved.
+        
+        // Member cash ledger entry (Essential to track how much the member holds)
         const existingLedgerEntry = await tx.memberCashLedger.findFirst({
           where: { referenceId: id, referenceType: "DonationCollection" },
         });

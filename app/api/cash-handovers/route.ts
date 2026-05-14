@@ -98,12 +98,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status");
+    const undepositedOnly = searchParams.get("undepositedOnly") === "true";
+
     const userRole = (session.user as any).role;
     const userId = (session.user as any).id;
 
     // Filter based on role
-    const where =
-      userRole === "MEMBER" ? { handoverFrom: userId } : {};
+    const where: any = userRole === "MEMBER" ? { handoverFrom: userId } : {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (undepositedOnly) {
+      where.bankDepositId = null;
+    }
 
     const handovers = await prisma.cashHandover.findMany({
       where,

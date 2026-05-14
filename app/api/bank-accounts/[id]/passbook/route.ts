@@ -60,7 +60,7 @@ export async function GET(
     const deposits = await prisma.bankDeposit.findMany({
       where: {
         accountId,
-        status: "VERIFIED",
+        status: { in: ["VERIFIED", "PENDING"] },
         ...(startDate || endDate ? { depositDate: dateFilter } : {}),
       },
       orderBy: { depositDate: "asc" },
@@ -130,7 +130,9 @@ export async function GET(
       rows.push({
         id: `dep-${d.id}`,
         date: d.depositDate,
-        description: d.remarks || `Bank Deposit – ${d.depositNumber}`,
+        description: d.status === "PENDING" 
+          ? `[PENDING] ${d.remarks || `Bank Deposit – ${d.depositNumber}`}`
+          : d.remarks || `Bank Deposit – ${d.depositNumber}`,
         creditAmount: d.totalAmount,
         debitAmount: 0,
         referenceType: "BANK_DEPOSIT",

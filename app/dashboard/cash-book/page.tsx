@@ -196,7 +196,7 @@ export default function CashBookPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
-              Total Receipts
+              Total Receipts (In)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -210,7 +210,7 @@ export default function CashBookPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
               <TrendingDown className="w-4 h-4" />
-              Total Payments
+              Total Payments (Out)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -259,10 +259,10 @@ export default function CashBookPage() {
                     Reference
                   </th>
                   <th className="text-right py-4 px-4 font-semibold text-slate-900">
-                    Receipts (₹)
+                    In (Receipts)
                   </th>
                   <th className="text-right py-4 px-4 font-semibold text-slate-900">
-                    Payments (₹)
+                    Out (Payments)
                   </th>
                   <th className="text-right py-4 px-4 font-semibold text-slate-900">
                     Balance (₹)
@@ -361,7 +361,7 @@ export default function CashBookPage() {
           <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded">
             <div>
               <p className="text-xs text-slate-600 uppercase tracking-wide mb-1">
-                Total Receipts
+                Total In (Receipts)
               </p>
               <p className="text-xl font-bold text-green-600">
                 ₹{totalCredits.toLocaleString()}
@@ -369,7 +369,7 @@ export default function CashBookPage() {
             </div>
             <div>
               <p className="text-xs text-slate-600 uppercase tracking-wide mb-1">
-                Total Payments
+                Total Out (Payments)
               </p>
               <p className="text-xl font-bold text-red-600">
                 ₹{totalDebits.toLocaleString()}

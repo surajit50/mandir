@@ -83,6 +83,9 @@ export async function POST(request: NextRequest) {
           cheques: {
             connect: (validatedData.chequeIds || []).map((id: string) => ({ id })),
           },
+          cashHandovers: {
+            connect: (validatedData.handoverIds || []).map((id: string) => ({ id })),
+          },
         },
         include: {
           account: { select: { id: true, bankName: true, accountNumber: true } },
@@ -108,11 +111,11 @@ export async function POST(request: NextRequest) {
           await tx.cashBook.create({
             data: {
               date: new Date(validatedData.depositDate),
-              description: `Bank Deposit - ${d.depositNumber}`,
+              description: `Bank Deposit (${d.depositType}) - ${d.depositNumber}`,
               debitAmount: cashPortion,
               creditAmount: 0,
               balance: 0,
-              referenceType: "BankDeposit",
+              referenceType: "BankDeposit", // We'll keep this but the UI will handle it
               referenceId: d.id,
               financialYearId: currentFY?.id,
             },

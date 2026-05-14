@@ -58,7 +58,7 @@ export default function BankPassbookPage() {
         `/api/bank-accounts/${selectedAccountId}/passbook?startDate=${startDate}&endDate=${endDate}`
       );
       const data = await response.json();
-      setPassbook(data || []);
+      setPassbook(data.transactions || []);
     } catch (error) {
       console.error("Failed to fetch passbook:", error);
     } finally {
@@ -66,10 +66,10 @@ export default function BankPassbookPage() {
     }
   };
 
-  const openingBalance = passbook.length ? passbook[0].balance - (passbook[0].debitAmount - passbook[0].creditAmount) : 0;
-  const totalDebits = passbook.reduce((sum, e) => sum + e.debitAmount, 0);
-  const totalCredits = passbook.reduce((sum, e) => sum + e.creditAmount, 0);
-  const closingBalance = passbook.length ? passbook[passbook.length - 1].balance : 0;
+  const openingBalance = Array.isArray(passbook) && passbook.length ? passbook[0].balance - (passbook[0].debitAmount - passbook[0].creditAmount) : 0;
+  const totalDebits = Array.isArray(passbook) ? passbook.reduce((sum, e) => sum + (e.debitAmount || 0), 0) : 0;
+  const totalCredits = Array.isArray(passbook) ? passbook.reduce((sum, e) => sum + (e.creditAmount || 0), 0) : 0;
+  const closingBalance = Array.isArray(passbook) && passbook.length ? passbook[passbook.length - 1].balance : 0;
 
   const handlePrint = () => {
     window.print();

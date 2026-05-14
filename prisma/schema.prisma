@@ -192,6 +192,8 @@ model CashHandover {
 
   // Relations
   deliveryNotes CashDeliveryNote[]
+  bankDepositId String?      @db.ObjectId
+  bankDeposit   BankDeposit? @relation(fields: [bankDepositId], references: [id])
 
   @@index([handoverDate])
   @@index([status])
@@ -376,7 +378,8 @@ model BankDeposit {
   createdAt DateTime @default(now())
 
   // Relations
-  cheques ChequeRegister[]
+  cheques       ChequeRegister[]
+  cashHandovers CashHandover[]
 
   @@index([accountId])
   @@index([depositDate])

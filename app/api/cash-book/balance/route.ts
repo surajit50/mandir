@@ -16,24 +16,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const [cashBookSummary, approvedHandovers, pendingVouchers] = await Promise.all([
+    const [cashBookSummary, pendingVouchers] = await Promise.all([
       prisma.cashBook.aggregate({
         where: {
           referenceType: {
-            not: "CashHandover",
+            not: "DonationCollection",
           },
         },
         _sum: {
           creditAmount: true,
           debitAmount: true,
-        },
-      }),
-      prisma.cashHandover.aggregate({
-        where: {
-          status: "APPROVED",
-        },
-        _sum: {
-          totalAmount: true,
         },
       }),
       prisma.paymentVoucher.aggregate({
@@ -48,23 +40,45 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const cashBookReceipts = cashBookSummary._sum.creditAmount || 0;
-    const cashBookPayments = cashBookSummary._sum.debitAmount || 0;
-    const handoverCashIn = approvedHandovers._sum.totalAmount || 0;
-    const totalReceipts = cashBookReceipts + handoverCashIn;
-    const totalPayments = cashBookPayments;
+    // Summary calculation
+    const totalReceipts = cashBookSummary._sum.creditAmount || 0;
+    
+    // Payments summary: we exclude 'BankDeposit' (transfers) from the expenditures total
+    const totalPaymentsRaw = await prisma.cashBook.aggregate({
+      where: {
+        referenceType: {
+          notIn: ["DonationCollection", "BankDeposit"],
+        },
+      },
+      _sum: {
+        debitAmount: true,
+      }
+    });
+    const totalPayments = totalPaymentsRaw._sum.debitAmount || 0;
+
     const pendingPayments = pendingVouchers._sum.amount || 0;
 
-    // Prevent tiny/legacy negative drift from blocking cash deposits in UI.
-    const rawBalance = totalReceipts - totalPayments;
+    // Balance calculation
+    const rawBalance = totalReceipts - (cashBookSummary._sum.debitAmount || 0);
     const balance = rawBalance < 0 ? 0 : rawBalance;
+
+    // Handover cash summary: total cash received through approved handovers
+    const handoverSummary = await prisma.cashBook.aggregate({
+      where: {
+        referenceType: "CashHandover",
+      },
+      _sum: {
+        creditAmount: true,
+      }
+    });
+    const handoverCashIn = handoverSummary._sum.creditAmount || 0;
 
     return NextResponse.json({
       balance,
       totalReceipts,
       totalPayments,
-      rawBalance,
       handoverCashIn,
+      rawBalance,
       pendingPayments,
       potentialBalance: balance - pendingPayments,
     });

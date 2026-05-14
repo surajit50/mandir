@@ -1,10 +1,13 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, FileText, Calendar } from 'lucide-react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ColumnDef } from "@tanstack/react-table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { Badge } from "@/components/ui/badge";
+import { AlertCircle, FileText, Calendar } from "lucide-react";
 
 interface Receipt {
   id: string;
@@ -27,17 +30,71 @@ export default function ReceiptsPage() {
   const fetchReceipts = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/receipts');
-      if (!res.ok) throw new Error('Failed to fetch receipts');
+      const res = await fetch("/api/receipts");
+      if (!res.ok) throw new Error("Failed to fetch receipts");
       const data = await res.json();
       setReceipts(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error fetching receipts');
+      setError(err instanceof Error ? err.message : "Error fetching receipts");
     } finally {
       setLoading(false);
     }
   };
+
+  // ── Column Definitions ───────────────────────────────────────────────────────
+  const columns: ColumnDef<Receipt>[] = [
+    {
+      id: "receiptNumber",
+      accessorKey: "receiptNumber",
+      header: "Receipt No.",
+      cell: ({ getValue }) => (
+        <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-400">
+          <FileText className="w-4 h-4 text-amber-500 shrink-0" />
+          {getValue<string>()}
+        </div>
+      ),
+    },
+    {
+      id: "receiptDate",
+      accessorKey: "receiptDate",
+      header: "Date",
+      cell: ({ getValue }) => (
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Calendar className="w-4 h-4 shrink-0" />
+          {new Date(getValue<string>()).toLocaleDateString("en-IN")}
+        </div>
+      ),
+    },
+    {
+      id: "donorName",
+      accessorKey: "donorName",
+      header: "Donor Name",
+      cell: ({ getValue }) => (
+        <span className="font-medium text-foreground">{getValue<string>()}</span>
+      ),
+    },
+    {
+      id: "receiptType",
+      accessorKey: "receiptType",
+      header: "Type",
+      cell: ({ getValue }) => (
+        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-700 text-xs font-medium">
+          {getValue<string>()}
+        </Badge>
+      ),
+    },
+    {
+      id: "amount",
+      accessorKey: "amount",
+      header: "Amount",
+      cell: ({ getValue }) => (
+        <span className="font-bold text-amber-600">
+          ₹{getValue<number>().toLocaleString()}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -47,7 +104,7 @@ export default function ReceiptsPage() {
           <p className="text-muted-foreground mt-1">View all generated donation receipts</p>
         </div>
         <Link href="/dashboard/receipts/new">
-          <Button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700">
+          <Button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white">
             <FileText className="w-4 h-4" />
             Generate Receipt
           </Button>
@@ -69,50 +126,19 @@ export default function ReceiptsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p>Loading receipts...</p>
-          ) : receipts.length === 0 ? (
-            <p className="text-muted-foreground">No receipts found.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Receipt Number</th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Date</th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Donor Name</th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Type</th>
-                    <th className="text-right py-3 px-4 font-semibold text-foreground">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receipts.map((receipt) => (
-                    <tr key={receipt.id} className="border-b hover:bg-muted/50">
-                      <td className="py-3 px-4 font-medium text-amber-700">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-amber-500" />
-                          {receipt.receiptNumber}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Calendar className="w-4 h-4" />
-                          {new Date(receipt.receiptDate).toLocaleDateString('en-IN')}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-medium">{receipt.donorName}</td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          {receipt.receiptType}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-bold text-amber-600">
-                        ₹{receipt.amount.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="py-16 text-center text-muted-foreground">
+              Loading receipts…
             </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={receipts}
+              searchPlaceholder="Search by donor name or receipt no…"
+              searchKey="donorName"
+              emptyState={
+                <p className="text-muted-foreground py-4">No receipts found.</p>
+              }
+            />
           )}
         </CardContent>
       </Card>
