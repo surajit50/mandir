@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     const difference = validatedData.bankBalance - validatedData.bookBalance;
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const reconciliation = await tx.bankReconciliation.create({
         data: {
           accountId: validatedData.accountId,
