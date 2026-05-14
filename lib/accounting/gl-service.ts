@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 
 export type GLEntry = {
   accountCode: string;
@@ -9,7 +8,7 @@ export type GLEntry = {
 };
 
 export async function postTransaction(
-  tx: Prisma.TransactionClient,
+  tx: any,
   params: {
     date: Date;
     description: string;
