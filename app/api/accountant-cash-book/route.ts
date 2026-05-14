@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const handoverEntries = approvedHandovers.map((handover) => ({
+    const handoverEntries = approvedHandovers.map((handover: any) => ({
       id: `handover-${handover.id}`,
       date: handover.approvedAt ?? new Date(),
       description: `Cash Handover - ${handover.handoverFromUser.name}`,
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
 
     // Running balance = receipts - payments
     let runningBalance = 0;
-    const enrichedEntries = mergedEntries.map((entry) => {
+    const enrichedEntries = mergedEntries.map((entry: any) => {
       runningBalance += (entry.creditAmount || 0) - (entry.debitAmount || 0);
       return {
         ...entry,
@@ -97,8 +97,8 @@ export async function GET(req: NextRequest) {
 
     // Calculate summary
     const summary = {
-      totalDebits: enrichedEntries.reduce((sum, e) => sum + e.debitAmount, 0),
-      totalCredits: enrichedEntries.reduce((sum, e) => sum + e.creditAmount, 0),
+      totalDebits: enrichedEntries.reduce((sum: number, e: any) => sum + e.debitAmount, 0),
+      totalCredits: enrichedEntries.reduce((sum: number, e: any) => sum + e.creditAmount, 0),
       closingBalance: runningBalance,
       entryCount: enrichedEntries.length,
     };
