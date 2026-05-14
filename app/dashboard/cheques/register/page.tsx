@@ -17,6 +17,7 @@ interface Cheque {
   chequeDate: string;
   amount: number;
   status: string;
+  payeeName: string;
   clearedDate?: string;
   bounceDate?: string;
   bounceReason?: string;
@@ -25,11 +26,6 @@ interface Cheque {
     bankName: string;
     accountNumber: string;
   };
-  paymentVouchers: Array<{
-    payee: {
-      name: string;
-    };
-  }>;
   createdAt: string;
 }
 
@@ -113,19 +109,12 @@ export default function ChequeRegisterPage() {
   };
 
   const getPayeeName = (cheque: Cheque): string => {
-    // Get payee from linked payment voucher
-    if (cheque.paymentVouchers && cheque.paymentVouchers.length > 0) {
-      return cheque.paymentVouchers[0].payee.name;
-    }
-    // If it's a blank leaf with 0 amount, show as unassigned
-    if (cheque.amount === 0) {
-      return "Unassigned Leaf";
-    }
-    return "—";
+    if (cheque.amount === 0) return "Unassigned Leaf";
+    return cheque.payeeName;
   };
 
   const isBlankLeaf = (cheque: Cheque): boolean => {
-    return cheque.amount === 0 && (!cheque.paymentVouchers || cheque.paymentVouchers.length === 0);
+    return cheque.amount === 0;
   };
 
   return (
