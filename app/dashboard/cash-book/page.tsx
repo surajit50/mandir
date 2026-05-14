@@ -54,8 +54,8 @@ export default function CashBookPage() {
     return dateMatch && typeMatch;
   });
 
-  const openingBalance = entries?.[0]
-    ? entries[0].balance - (entries[0].debitAmount - entries[0].creditAmount)
+  const openingBalance = filteredEntries?.[0]
+    ? filteredEntries[0].balance - filteredEntries[0].creditAmount + filteredEntries[0].debitAmount
     : 0;
 
   const totalDebits =
@@ -287,7 +287,7 @@ export default function CashBookPage() {
                 </tr>
 
                 {/* Transaction Rows */}
-                {filteredEntries?.map((entry, index) => (
+                {[...(filteredEntries || [])].reverse().map((entry, index) => (
                   <tr
                     key={entry.id}
                     className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${
