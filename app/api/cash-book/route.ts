@@ -38,7 +38,27 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    let runningBalance = 0;
+    // Fetch Cash Account (1001) opening balance
+    const cashAccount = await prisma.gLAccount.findUnique({
+      where: { accountCode: "1001" },
+      select: { openingBalance: true },
+    });
+
+    // Sort: date (day only) asc, then receipts (credit) before payments (debit), then createdAt asc
+    mergedEntries.sort((a: any, b: any) => {
+      const d1 = new Date(a.date).setHours(0, 0, 0, 0);
+      const d2 = new Date(b.date).setHours(0, 0, 0, 0);
+      if (d1 !== d2) return d1 - d2;
+
+      // Receipts before payments on the same date
+      if (a.creditAmount > 0 && b.debitAmount > 0) return -1;
+      if (a.debitAmount > 0 && b.creditAmount > 0) return 1;
+
+      // Stable sort using creation time
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+
+    let runningBalance = cashAccount?.openingBalance || 0;
     const normalizedEntries = mergedEntries.map((entry: any) => {
       runningBalance += (entry.creditAmount || 0) - (entry.debitAmount || 0);
       return {
