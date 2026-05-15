@@ -39,15 +39,6 @@ export default function CashLedgerPage() {
   const { data: session } = useSession();
   const userRole = session?.user?.role || "";
 
-  const [startDate, setStartDate] = useState(
-    new Date(new Date().setMonth(new Date().getMonth() - 1))
-      .toISOString()
-      .split("T")[0],
-  );
-  const [endDate, setEndDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
-
   const apiUrl = ["ADMIN", "ACCOUNTANT"].includes(userRole)
     ? `/api/cash-book?startDate=${startDate}&endDate=${endDate}`
     : "/api/members/me/ledger";
@@ -58,6 +49,15 @@ export default function CashLedgerPage() {
   } = useSWR<any>(userRole ? apiUrl : null, fetcher);
 
   const entries = Array.isArray(rawData) ? rawData : (rawData?.entries || []);
+
+  const [startDate, setStartDate] = useState(
+    new Date(new Date().setMonth(new Date().getMonth() - 1))
+      .toISOString()
+      .split("T")[0],
+  );
+  const [endDate, setEndDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
 
   const filteredEntries = entries.filter((entry: any) => {
     const entryDate = new Date(entry.date).toISOString().split("T")[0];

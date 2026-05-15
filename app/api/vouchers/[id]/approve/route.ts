@@ -157,30 +157,25 @@ export async function POST(
           }
         }
 
-        // ── 4. CashBook entry (Only for cash vouchers or bank withdrawals) ──
-        const isBankWithdrawal = isReceipt && voucher.paymentMethod === "CASH" && useBank;
-        if (useCash || isBankWithdrawal) {
-          const existingCashEntry = await tx.cashBook.findFirst({
-            where: { paymentVoucherId: id },
-          });
+        // ── 4. CashBook entry ───────────────────────────────────────
+        const existingCashEntry = await tx.cashBook.findFirst({
+          where: { paymentVoucherId: id },
+        });
 
-          if (!existingCashEntry) {
-            await tx.cashBook.create({
-              data: {
-                date: voucher.voucherDate,
-                description: isBankWithdrawal 
-                  ? `Bank Withdrawal (${voucher.bankAccount?.bankName}) – ${voucher.voucherNumber}`
-                  : `${voucher.voucherType} – ${voucher.payee.name} (${voucher.description})`,
-                debitAmount: isPayment ? voucher.amount : 0,
-                creditAmount: isReceipt ? voucher.amount : 0,
-                balance: 0, // running balance computed separately by ledger
-                referenceType: "PaymentVoucher",
-                referenceId: id,
-                paymentVoucherId: id,
-                financialYearId: currentFY?.id,
-              },
-            });
-          }
+        if (!existingCashEntry) {
+          await tx.cashBook.create({
+            data: {
+              date: voucher.voucherDate,
+              description: `${voucher.voucherType} – ${voucher.payee.name} (${voucher.description})`,
+              debitAmount: isPayment ? voucher.amount : 0,
+              creditAmount: isReceipt ? voucher.amount : 0,
+              balance: 0, // running balance computed separately by ledger
+              referenceType: "PaymentVoucher",
+              referenceId: id,
+              paymentVoucherId: id,
+              financialYearId: currentFY?.id,
+            },
+          });
         }
 
         // ── 5. GL double-entry posting ──────────────────────────────
