@@ -279,7 +279,7 @@ export default function ReportsPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} />
                         <Legend />
                         <Bar dataKey="donations" fill="#3b82f6" name="Donations" />
                         <Bar dataKey="payments" fill="#ef4444" name="Payments" />
@@ -311,7 +311,7 @@ export default function ReportsPage() {
                           outerRadius={100}
                           dataKey="value"
                         >
-                          {Array.from({ length: 4 }).map((_, index) => (
+                          {Array.from({ length: 4 }).map((_: any, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -342,7 +342,7 @@ export default function ReportsPage() {
                           outerRadius={100}
                           dataKey="value"
                         >
-                          {Array.from({ length: 3 }).map((_, index) => (
+                          {Array.from({ length: 3 }).map((_: any, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -373,7 +373,7 @@ export default function ReportsPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="category" />
                         <YAxis />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} />
                         <Legend />
                         <Bar dataKey="receipts" fill="#10b981" name="Cash Receipts" />
                         <Bar dataKey="payments" fill="#ef4444" name="Cash Payments" />
@@ -518,16 +518,16 @@ export default function ReportsPage() {
                           data={reportData.income.filter((r: any) => r.amount > 0)}
                           cx="50%" cy="50%"
                           labelLine={false}
-                          label={({ accountName, amount }) => `${accountName}: ${fmt(amount)}`}
+                          label={({ name, value }) => `${name}: ${fmt(Number(value))}`}
                           outerRadius={80}
                           dataKey="amount"
                           nameKey="accountName"
                         >
-                          {reportData.income.map((_, index) => (
+                          {reportData.income.map((_: any, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -544,16 +544,16 @@ export default function ReportsPage() {
                           data={reportData.expense.filter((r: any) => r.amount > 0)}
                           cx="50%" cy="50%"
                           labelLine={false}
-                          label={({ accountName, amount }) => `${accountName}: ${fmt(amount)}`}
+                          label={({ name, value }) => `${name}: ${fmt(Number(value))}`}
                           outerRadius={80}
                           dataKey="amount"
                           nameKey="accountName"
                         >
-                          {reportData.expense.map((_, index) => (
+                          {reportData.expense.map((_: any, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -647,11 +647,11 @@ export default function ReportsPage() {
                         outerRadius={100}
                         dataKey="value"
                       >
-                        {reportData.accounts.map((_, index) => (
+                        {reportData.accounts.map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: number) => fmt(v)} />
+                      <Tooltip formatter={(v: any) => fmt(Number(v))} />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -703,7 +703,7 @@ export default function ReportsPage() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" tickFormatter={(d: string) => new Date(d).toLocaleDateString()} />
                       <YAxis />
-                      <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={(d: string) => new Date(d).toLocaleDateString()} />
+                      <Tooltip formatter={(v: any) => fmt(Number(v))} labelFormatter={(d: any) => new Date(d).toLocaleDateString()} />
                       <Legend />
                       <Line type="monotone" dataKey="creditAmount" stroke="#10b981" name="Receipts" />
                       <Line type="monotone" dataKey="debitAmount" stroke="#ef4444" name="Payments" />
@@ -794,16 +794,16 @@ export default function ReportsPage() {
                           data={reportData.byType.filter((r: any) => r.amount > 0)}
                           cx="50%" cy="50%"
                           labelLine={false}
-                          label={({ type, amount }) => `${type}: ${fmt(amount)}`}
+                          label={({ name, value }) => `${name}: ${fmt(Number(value))}`}
                           outerRadius={80}
                           dataKey="amount"
                           nameKey="type"
                         >
-                          {reportData.byType.map((_, index) => (
+                          {reportData.byType.map((_: any, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} />
                       </PieChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -817,7 +817,7 @@ export default function ReportsPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <Tooltip formatter={(v: number) => fmt(v)} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} />
                         <Bar dataKey="amount" fill="#3b82f6" name="Donations" />
                       </BarChart>
                     </ResponsiveContainer>

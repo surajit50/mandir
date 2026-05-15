@@ -5,9 +5,10 @@ import { prisma } from "@/lib/prisma";
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -19,7 +20,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden - Admin only" }, { status: 403 });
     }
 
-    const bookId = params.id;
+    const bookId = id;
 
     // Check if any cheques from this book are used
     const usedCheques = await prisma.chequeRegister.findFirst({

@@ -71,17 +71,18 @@ export default function CashBookPage() {
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterType, setFilterType] = useState<string>("all");
 
-  const filteredEntries = entries?.filter((entry) => {
-    const entryDate = new Date(entry.date).toISOString().split("T")[0];
-    const dateMatch = entryDate >= startDate && entryDate <= endDate;
-    const typeMatch =
-      filterType === "all" || entry.referenceType === filterType;
-    return dateMatch && typeMatch;
-  });
+  const apiUrl = `/api/cash-book?startDate=${startDate}&endDate=${endDate}`;
+  const { data, isLoading, error, mutate } = useSWR<CashBookResponse>(apiUrl, fetcher);
 
-  const openingBalance = entries?.[0]
-    ? entries[0].balance - (entries[0].debitAmount - entries[0].creditAmount)
-    : 0;
+  const entries = data?.entries || [];
+  const summary = data?.summary || {
+    openingBalance: 0,
+    totalReceipts: 0,
+    totalPayments: 0,
+    closingBalance: 0,
+    pendingMemberCash: 0,
+    totalTrustCash: 0,
+  };
 
   const filteredEntries = useMemo(() => {
     if (filterType === "all") return entries;
@@ -302,16 +303,23 @@ export default function CashBookPage() {
                   <td className="py-3 px-3 text-right font-black text-slate-900 dark:text-white">{summary.openingBalance.toLocaleString()}</td>
                 </tr>
 
-                {/* Transaction Rows */}
-                {filteredEntries?.map((entry, index) => (
-                  <tr
-                    key={entry.id}
-                    className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${
-                      index % 2 === 0 ? "bg-white" : "bg-slate-50"
-                    }`}
-                  >
-                    <td className="py-3 px-4 text-slate-900 font-medium">
-                      {new Date(entry.date).toLocaleDateString()}
+                {/* Receipt Entries */}
+                {receipts.map((entry) => (
+                  <tr key={entry.id} className="group hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                    <td className="py-3 px-3 border-r border-slate-100 dark:border-slate-800 text-slate-400 font-mono">{format(new Date(entry.date), "dd/MM/yy")}</td>
+                    <td className="py-3 px-3 border-r border-slate-100 dark:border-slate-800">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">To</span> 
+                          <span className="font-semibold text-slate-700 dark:text-slate-200">{entry.description}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-slate-400 font-mono opacity-60">REF: {entry.referenceId?.slice(-8).toUpperCase() || "N/A"}</span>
+                          <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/20">
+                            {entry.referenceType}
+                          </Badge>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-3 text-right font-bold text-emerald-600 tabular-nums">{entry.creditAmount.toLocaleString()}</td>
                   </tr>

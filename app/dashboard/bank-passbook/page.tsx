@@ -79,13 +79,39 @@ export default function BankPassbookPage() {
     }
   };
 
-  const openingBalance = Array.isArray(passbook) && passbook.length ? passbook[0].balance - (passbook[0].debitAmount - passbook[0].creditAmount) : 0;
-  const totalDebits = Array.isArray(passbook) ? passbook.reduce((sum, e) => sum + (e.debitAmount || 0), 0) : 0;
-  const totalCredits = Array.isArray(passbook) ? passbook.reduce((sum, e) => sum + (e.creditAmount || 0), 0) : 0;
-  const closingBalance = Array.isArray(passbook) && passbook.length ? passbook[passbook.length - 1].balance : 0;
+  const filteredPassbook = useMemo(() => {
+    if (!searchQuery) return passbook;
+    return passbook.filter(entry => 
+      entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.voucherNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.instrumentNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.instrumentType?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [passbook, searchQuery]);
 
-  const handlePrint = () => {
-    window.print();
+  const openingBalance = Array.isArray(passbook) && passbook.length ? passbook[0].balance - passbook[0].creditAmount + passbook[0].debitAmount : 0;
+
+  const handleExportExcel = () => {
+    // Basic CSV export logic as placeholder for "Download Excel"
+    const headers = ["Voucher ID", "Voucher Date", "Instrument Type", "Instrument No", "Passbook Date", "Amount Credit", "Amount Debit", "Balance"];
+    const rows = filteredPassbook.map(e => [
+      e.referenceId || "N/A",
+      new Date(e.date).toLocaleDateString(),
+      e.referenceType,
+      e.chequeNumber || "",
+      new Date(e.date).toLocaleDateString(),
+      e.creditAmount,
+      e.debitAmount,
+      e.balance
+    ]);
+    
+    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bank-passbook-${selectedAccount?.accountNumber}.csv`;
+    a.click();
   };
 
   return (
@@ -147,128 +173,72 @@ export default function BankPassbookPage() {
         </div>
       </Card>
 
-      {selectedAccount && passbook.length > 0 && (
-        <>
-          {/* Account Header */}
-          <Card className="bg-slate-50">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Bank Name</p>
-                  <p className="text-lg font-semibold text-slate-900">{selectedAccount.bankName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Account Number</p>
-                  <p className="text-lg font-semibold text-slate-900">{selectedAccount.accountNumber}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Account Holder</p>
-                  <p className="text-lg font-semibold text-slate-900">{selectedAccount.accountHolder}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase tracking-wide">Period</p>
-                  <p className="text-lg font-semibold text-slate-900">
-                    {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Toolbar */}
+      <div className="flex justify-between items-center px-1">
+        <div className="flex gap-2">
+          <Select defaultValue="all">
+            <SelectTrigger className="w-20 h-8 text-xs border-slate-300">
+              <SelectValue placeholder="all" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">all</SelectItem>
+              <SelectItem value="receipts">receipts</SelectItem>
+              <SelectItem value="payments">payments</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button 
+            onClick={handleExportExcel}
+            className="bg-cyan-700 hover:bg-cyan-800 h-8 px-4 text-[10px] font-bold uppercase tracking-wide"
+          >
+            Download Excel
+          </Button>
+        </div>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">Opening Balance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-slate-900">₹{openingBalance.toLocaleString()}</p>
-              </CardContent>
-            </Card>
+        <div className="relative w-64">
+          <Input 
+            placeholder="search..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 text-xs pr-8 border-slate-300 bg-slate-50/50 focus:bg-white"
+          />
+          <Search className="w-3.5 h-3.5 absolute right-2.5 top-2.25 text-slate-400" />
+        </div>
+      </div>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">Total Deposits</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-green-600">₹{totalCredits.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">Total Withdrawals</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-red-600">₹{totalDebits.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">Closing Balance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-blue-600">₹{closingBalance.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Passbook Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction Details</CardTitle>
-              <CardDescription>{passbook.length} transactions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b-2 border-slate-200">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Date</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Description</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Cheque/Ref</th>
-                      <th className="text-right py-3 px-4 font-semibold text-slate-700">Deposit (₹)</th>
-                      <th className="text-right py-3 px-4 font-semibold text-slate-700">Withdrawal (₹)</th>
-                      <th className="text-right py-3 px-4 font-semibold text-slate-700">Balance (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {passbook.map((entry, index) => (
-                      <tr
-                        key={entry.id}
-                        className={`border-b border-slate-100 hover:bg-slate-50 ${
-                          index % 2 === 0 ? "bg-white" : "bg-slate-50"
-                        }`}
-                      >
-                        <td className="py-3 px-4 text-slate-900 font-medium">
-                          {new Date(entry.date).toLocaleDateString()}
-                        </td>
-                        <td className="py-3 px-4 text-slate-700">{entry.description}</td>
-                        <td className="py-3 px-4 text-slate-600">
-                          {entry.chequeNumber || entry.referenceType.substring(0, 3).toUpperCase()}
-                        </td>
-                        <td className="py-3 px-4 text-right text-green-600 font-medium">
-                          {entry.creditAmount > 0 ? `₹${entry.creditAmount.toLocaleString()}` : "-"}
-                        </td>
-                        <td className="py-3 px-4 text-right text-red-600 font-medium">
-                          {entry.debitAmount > 0 ? `₹${entry.debitAmount.toLocaleString()}` : "-"}
-                        </td>
-                        <td className="py-3 px-4 text-right text-slate-900 font-bold">
-                          ₹{entry.balance.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Summary Footer */}
-              <div className="mt-6 pt-4 border-t-2 border-slate-200">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-600 uppercase tracking-wide mb-1">Total Deposits</p>
-                    <p className="text-lg font-bold text-green-600">₹{totalCredits.toLocaleString()}</p>
+      {/* Main Passbook Table */}
+      <div className="border border-slate-200 rounded-sm overflow-hidden shadow-sm bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px] leading-tight border-collapse">
+            <thead>
+              <tr className="bg-cyan-500 text-white divide-x divide-cyan-400/50">
+                <th className="py-2.5 px-3 text-left font-bold w-32 group cursor-pointer hover:bg-cyan-600">
+                  <div className="flex items-center justify-between uppercase">
+                    Voucher ID <ArrowUpDown className="w-3 h-3 text-cyan-200" />
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-left font-bold w-24 group cursor-pointer hover:bg-cyan-600">
+                  <div className="flex items-center justify-between uppercase">
+                    Voucher Date <ArrowUpDown className="w-3 h-3 text-cyan-200" />
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-left font-bold group cursor-pointer hover:bg-cyan-600">
+                  <div className="flex items-center justify-between uppercase">
+                    Instrument Type <ArrowUpDown className="w-3 h-3 text-cyan-200" />
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-left font-bold w-28 group cursor-pointer hover:bg-cyan-600">
+                  <div className="flex items-center justify-between uppercase">
+                    Instrument No <ArrowUpDown className="w-3 h-3 text-cyan-200" />
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-left font-bold w-24 group cursor-pointer hover:bg-cyan-600">
+                  <div className="flex items-center justify-between uppercase">
+                    Instrument Date <ArrowUpDown className="w-3 h-3 text-cyan-200" />
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-left font-bold w-24 group cursor-pointer hover:bg-cyan-600">
+                  <div className="flex items-center justify-between uppercase">
+                    Passbook Date <ArrowUpDown className="w-3 h-3 text-cyan-200" />
                   </div>
                 </th>
                 <th className="py-2.5 px-3 text-right font-bold w-28 group cursor-pointer hover:bg-cyan-600">
