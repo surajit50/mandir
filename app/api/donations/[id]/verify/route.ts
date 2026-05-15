@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { postTransaction } from "@/lib/accounting/gl-service";
 
 export async function POST(
   request: NextRequest,
@@ -52,11 +53,11 @@ export async function POST(
       });
 
       if (isVerifying) {
-        // NOTE: We no longer post DonationCollections to the Main Cash Book here.
-        // The cash is still in the collector's custody. 
-        // It will only enter the Main Cash Book when a 'CashHandover' is approved.
-        
-        // Member cash ledger entry (Essential to track how much the member holds)
+        // NOTE: DonationCollection cash is in the collector's custody.
+        // It enters the Main Cash Book only when a CashHandover is approved.
+        // But we still need GL posting for income recognition.
+
+        // Member cash ledger entry (track how much the member holds)
         const existingLedgerEntry = await tx.memberCashLedger.findFirst({
           where: { referenceId: id, referenceType: "DonationCollection" },
         });
@@ -74,6 +75,20 @@ export async function POST(
             },
           });
         }
+
+        // ── GL Posting: Recognize donation income ──────────────────────────
+        // Debit: Cash Account, Credit: Donation Income
+        await postTransaction(tx, {
+          date: donation.collectionDate,
+          description: `Donation Collection - ${donation.collector.name}`,
+          referenceType: "DonationCollection",
+          referenceId: id,
+          financialYearId: currentFY?.id,
+          entries: [
+            { accountCode: "1001", accountName: "Cash Account", accountType: "Asset", debit: donation.totalAmount },
+            { accountCode: "4001", accountName: "Donation Income", accountType: "Income", credit: donation.totalAmount },
+          ],
+        });
 
         // Add Gold/Silver items to Jewellery Register
         const metalCounts: Record<string, number> = {};

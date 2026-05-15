@@ -43,10 +43,9 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             chequeNumber: true,
-            chequeDate: true,
             paymentVouchers: {
               take: 1,
-              select: { payee: { select: { name: true } } },
+              select: { amount: true, referenceDate: true, payee: { select: { name: true } } },
             },
           },
         },
@@ -58,13 +57,12 @@ export async function GET(request: NextRequest) {
     const cheques = await prisma.chequeRegister.findMany({
       where: {
         accountId,
-        chequeDate: { lte: endDate },
       },
-      orderBy: { chequeDate: "asc" },
+      orderBy: { createdAt: "asc" },
       include: {
         paymentVouchers: {
           take: 1,
-          select: { payee: { select: { name: true } } },
+          select: { amount: true, referenceDate: true, payee: { select: { name: true } } },
         },
       },
     });
@@ -95,11 +93,11 @@ export async function GET(request: NextRequest) {
       .map((c: any) => ({
         id: c.id,
         type: "RECEIVED" as const,
-        date: c.chequeDate,
+        date: c.paymentVouchers[0]?.referenceDate || c.createdAt,
         description: `Received Cheque #${c.chequeNumber} from ${chequePayeeDisplayName(c)}`,
         chequeNumber: c.chequeNumber,
         payeeName: "Temple Trust",
-        amount: c.amount,
+        amount: c.paymentVouchers[0]?.amount || 0,
         status: c.status,
         depositType: "CHEQUE",
         encashmentDate: c.clearedDate,
@@ -113,19 +111,22 @@ export async function GET(request: NextRequest) {
     // Include cheques of type ISSUED (or missing/null for legacy data) and EXCLUDE those already part of a "RECEIVED" deposit (credits)
     const issued = cheques
       .filter((c: any) => (c.chequeType === "ISSUED" || !c.chequeType) && !linkedChequeIds.has(c.id))
-      .map((c: any) => ({
-        id: c.id,
-        type: "ISSUED" as const,
-        date: c.chequeDate,
-        description: `Cheque #${c.chequeNumber}`,
-        chequeNumber: c.chequeNumber,
-        payeeName: chequePayeeDisplayName(c),
-        amount: c.amount,
-        status: c.status,
-        clearedDate: c.clearedDate,
-        encashmentDate: c.clearedDate,
-        isAssigned: c.amount > 0,
-      }));
+      .map((c: any) => {
+        const amount = c.paymentVouchers[0]?.amount || 0;
+        return {
+          id: c.id,
+          type: "ISSUED" as const,
+          date: c.paymentVouchers[0]?.referenceDate || c.createdAt,
+          description: `Cheque #${c.chequeNumber}`,
+          chequeNumber: c.chequeNumber,
+          payeeName: chequePayeeDisplayName(c),
+          amount: amount,
+          status: c.status,
+          clearedDate: c.clearedDate,
+          encashmentDate: c.clearedDate,
+          isAssigned: amount > 0,
+        };
+      });
 
     const assignedIssued = issued.filter((c: any) => c.isAssigned);
     const unassignedIssued = issued.filter((c: any) => !c.isAssigned);

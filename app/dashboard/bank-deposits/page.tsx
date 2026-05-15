@@ -101,7 +101,7 @@ export default function BankDepositsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Bank Deposits</h1>
           <p className="text-muted-foreground mt-2">
-            Record and manage cash and cheque deposits
+            Record cash deposits from handovers. Cheques are automatically deposited when cleared in the Cheque Register.
           </p>
         </div>
         {userRole !== "ADMIN" && (

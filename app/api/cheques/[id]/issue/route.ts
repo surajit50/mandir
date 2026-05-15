@@ -5,10 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const IssueChequeSchema = z.object({
-  amount: z.number().positive("Amount must be positive"),
+  // Empty schema or we can keep it if we want to allow some metadata updates
 });
 
-// PATCH /api/cheques/[id]/issue — assign amount to a blank cheque (via PaymentVoucher)
+// PATCH /api/cheques/[id]/issue — mark a blank leaf as ISSUED
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -29,25 +29,19 @@ export async function PATCH(
       );
     }
 
-    const body = await request.json();
-    const validated = IssueChequeSchema.parse(body);
-
     // Find the cheque
     const cheque = await prisma.chequeRegister.findUnique({
       where: { id },
-      select: { id: true, status: true, amount: true },
+      select: { id: true, status: true },
     });
 
     if (!cheque) {
       return NextResponse.json({ error: "Cheque not found" }, { status: 404 });
     }
 
-    // Allow issuing unassigned cheques (ISSUED with amount 0)
-    const isBlank = cheque.amount === 0;
-
-    if (cheque.status !== "ISSUED" || !isBlank) {
+    if (cheque.status !== "AVAILABLE") {
       return NextResponse.json(
-        { error: "Only blank cheque leaves can be issued" },
+        { error: "Only available cheque leaves can be issued" },
         { status: 400 }
       );
     }
@@ -55,19 +49,12 @@ export async function PATCH(
     const updated = await prisma.chequeRegister.update({
       where: { id },
       data: {
-        amount: validated.amount,
-        chequeDate: new Date(),
+        status: "ISSUED",
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation error", details: error.errors },
-        { status: 400 }
-      );
-    }
     console.error("Cheque issue error:", error);
     return NextResponse.json(
       { error: "Failed to issue cheque" },

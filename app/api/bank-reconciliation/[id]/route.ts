@@ -54,10 +54,10 @@ export async function GET(
           select: {
             id: true,
             chequeNumber: true,
-            chequeDate: true,
+            createdAt: true,
             paymentVouchers: {
               take: 1,
-              select: { payee: { select: { name: true } } },
+              select: { amount: true, payee: { select: { name: true } } },
             },
           },
         },
@@ -96,7 +96,7 @@ export async function GET(
       include: {
         paymentVouchers: {
           take: 1,
-          select: { payee: { select: { name: true } } },
+          select: { amount: true, referenceDate: true, payee: { select: { name: true } } },
         },
       },
     });
@@ -107,16 +107,15 @@ export async function GET(
       where: {
         accountId: reconciliation.accountId,
         status: { in: ["ISSUED", "DEPOSITED"] },
-        chequeDate: {
+        createdAt: {
           lte: endDate,
         },
-        amount: { gt: 0 },
       },
-      orderBy: { chequeDate: "asc" },
+      orderBy: { createdAt: "asc" },
       include: {
         paymentVouchers: {
           take: 1,
-          select: { payee: { select: { name: true } } },
+          select: { amount: true, referenceDate: true, payee: { select: { name: true } } },
         },
       },
     });
@@ -127,7 +126,7 @@ export async function GET(
       description: `Cheque #${c.chequeNumber} - ${chequePayeeDisplayName(c)}`,
       chequeNumber: c.chequeNumber,
       payeeName: chequePayeeDisplayName(c),
-      amount: c.amount,
+      amount: c.paymentVouchers[0]?.amount || 0,
       type: "ISSUED" as const,
       referenceType: "CHEQUE",
       clearedDate: c.clearedDate,
@@ -141,8 +140,8 @@ export async function GET(
       id: c.id,
       chequeNumber: c.chequeNumber,
       payeeName: chequePayeeDisplayName(c),
-      amount: c.amount,
-      chequeDate: c.chequeDate,
+      amount: c.paymentVouchers[0]?.amount || 0,
+      chequeDate: c.paymentVouchers[0]?.referenceDate || c.createdAt,
       status: c.status,
     }));
 

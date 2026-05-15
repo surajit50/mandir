@@ -109,6 +109,21 @@ export async function POST(
             referenceId: id,
           },
         });
+
+        // ── GL Posting (Trust Cash-In) ──────────────────────────────────
+        // Debit Cash Account (1001), Credit Donation Income (4001)
+        const { postTransaction } = await import("@/lib/accounting/gl-service");
+        await postTransaction(tx, {
+          date: new Date(),
+          description: `Cash Handover - ${handover.handoverFromUser.name}`,
+          referenceType: "CashHandover",
+          referenceId: id,
+          financialYearId: currentFY?.id,
+          entries: [
+            { accountCode: "1001", accountName: "Cash Account", accountType: "Asset", debit: handover.totalAmount },
+            { accountCode: "4001", accountName: "Donation Income", accountType: "Income", credit: handover.totalAmount },
+          ],
+        });
       }
 
       // Log audit

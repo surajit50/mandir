@@ -40,23 +40,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EncashModal } from "@/components/cheques/encash-modal";
+import { BounceModal } from "@/components/cheques/bounce-modal";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 interface Cheque {
   id: string;
   chequeNumber: string;
-  chequeBookNumber: string | null;
+  chequeBook?: {
+    bookNumber: string;
+  };
   chequeDate: string;
   amount: number;
   payeeName: string;
   status: string;
+  chequeType: string;
   account: {
     id: string;
     bankName: string;
     accountNumber: string;
   };
   createdAt: string;
+  voucherStatus?: string | null;
 }
 
 interface BankAccount {
@@ -68,7 +74,7 @@ interface BankAccount {
 export default function ChequesPage() {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
-  const { data: cheques, error, isLoading } = useSWR<Cheque[]>(
+  const { data: cheques, error, isLoading, mutate } = useSWR<Cheque[]>(
     "/api/cheques",
     fetcher
   );
@@ -76,6 +82,9 @@ export default function ChequesPage() {
     "/api/bank-accounts",
     fetcher
   );
+
+  const [encashingCheque, setEncashingCheque] = useState<Cheque | null>(null);
+  const [bouncingCheque, setBouncingCheque] = useState<Cheque | null>(null);
 
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
@@ -109,16 +118,29 @@ export default function ChequesPage() {
 
   const stats = {
     total: cheques?.length || 0,
+    available: cheques?.filter((c) => c.status === "AVAILABLE").length || 0,
+    issued: cheques?.filter((c) => c.status === "ISSUED").length || 0,
+    received: cheques?.filter((c) => c.status === "RECEIVED").length || 0,
     totalAmount: cheques?.reduce((sum, item) => sum + item.amount, 0) || 0,
     cleared: cheques?.filter((c) => c.status === "CLEARED").length || 0,
     bounced: cheques?.filter((c) => c.status === "BOUNCED").length || 0,
   };
 
   const statusConfig: Record<string, { icon: any; text: string; className: string }> = {
+    AVAILABLE: {
+      icon: Clock3,
+      text: "Available",
+      className: "bg-slate-100 text-slate-700 border-slate-200",
+    },
     ISSUED: {
       icon: Clock3,
       text: "Issued",
       className: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    },
+    RECEIVED: {
+      icon: IndianRupee,
+      text: "Received",
+      className: "bg-purple-100 text-purple-700 border-purple-200",
     },
     DEPOSITED: {
       icon: AlertCircle,
@@ -135,9 +157,14 @@ export default function ChequesPage() {
       text: "Bounced",
       className: "bg-red-100 text-red-700 border-red-200",
     },
+    CANCELLED: {
+      icon: XCircle,
+      text: "Cancelled",
+      className: "bg-slate-100 text-slate-500 border-slate-200",
+    },
   };
 
-  return (
+  const renderContent = () => (
     <div className="space-y-6">
       {/* Header */}
       <div className="rounded-3xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-lg">
@@ -156,6 +183,15 @@ export default function ChequesPage() {
             </div>
           </div>
           <div className="flex gap-2">
+            <Link href="/dashboard/cheques/master">
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl border-white/30 text-white hover:bg-white/10"
+              >
+                <BookOpen className="mr-2 h-4 w-4" />
+                Cheque Master
+              </Button>
+            </Link>
             <Button
               variant="outline"
               className="h-11 rounded-xl border-white/30 text-white hover:bg-white/10"
@@ -217,7 +253,7 @@ export default function ChequesPage() {
               </Select>
 
               {/* Status filter buttons (same) */}
-              {["ALL", "ISSUED", "DEPOSITED", "CLEARED", "BOUNCED"].map((f) => (
+              {["ALL", "AVAILABLE", "ISSUED", "RECEIVED", "DEPOSITED", "CLEARED", "BOUNCED"].map((f) => (
                 <Button
                   key={f}
                   size="sm"
@@ -369,9 +405,9 @@ export default function ChequesPage() {
                                 <p className="font-semibold text-slate-900">
                                   #{cheque.chequeNumber}
                                 </p>
-                                {cheque.chequeBookNumber && (
+                                {cheque.chequeBook?.bookNumber && (
                                   <p className="text-xs text-slate-500 mt-1">
-                                    {cheque.chequeBookNumber}
+                                    {cheque.chequeBook.bookNumber}
                                   </p>
                                 )}
                               </TableCell>
@@ -391,12 +427,38 @@ export default function ChequesPage() {
                                 </div>
                               </TableCell>
                               <TableCell className="text-right">
-                                <Link href={`/dashboard/cheques/${cheque.id}`}>
-                                  <Button size="sm" variant="outline" className="rounded-xl">
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View
-                                  </Button>
-                                </Link>
+                                <div className="flex gap-2 justify-end">
+                                  {["ISSUED", "RECEIVED", "DEPOSITED"].includes(cheque.status) && 
+                                    cheque.amount > 0 && 
+                                    cheque.voucherStatus === "APPROVED" && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setEncashingCheque(cheque)}
+                                        className="rounded-xl border-green-200 text-green-600 hover:bg-green-50 hover:text-green-700"
+                                      >
+                                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                                        Clear
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setBouncingCheque(cheque)}
+                                        className="rounded-xl border-amber-200 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                                      >
+                                        <AlertCircle className="mr-1 h-3 w-3" />
+                                        Bounce
+                                      </Button>
+                                    </>
+                                  )}
+                                  <Link href={`/dashboard/cheques/${cheque.id}`}>
+                                    <Button size="sm" variant="outline" className="rounded-xl">
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      View
+                                    </Button>
+                                  </Link>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -441,6 +503,37 @@ export default function ChequesPage() {
             </Link>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50/50 p-6">
+      {renderContent()}
+
+      {/* Modals */}
+      {encashingCheque && (
+        <EncashModal
+          isOpen={!!encashingCheque}
+          onClose={() => setEncashingCheque(null)}
+          cheque={encashingCheque}
+          onSuccess={() => {
+            mutate();
+            setEncashingCheque(null);
+          }}
+        />
+      )}
+
+      {bouncingCheque && (
+        <BounceModal
+          isOpen={!!bouncingCheque}
+          onClose={() => setBouncingCheque(null)}
+          cheque={bouncingCheque}
+          onSuccess={() => {
+            mutate();
+            setBouncingCheque(null);
+          }}
+        />
       )}
     </div>
   );

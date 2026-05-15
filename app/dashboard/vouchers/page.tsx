@@ -112,6 +112,7 @@ export default function VouchersPage() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleDelete = async (id: string) => {
     try {
@@ -141,6 +142,25 @@ export default function VouchersPage() {
       toast.error("Error approving voucher");
     } finally {
       setIsVerifying(null);
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    try {
+      setIsResetting(true);
+      const res = await fetch("/api/system/reset-db", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to reset database");
+      }
+      toast.success("Database wiped successfully. Refreshing page...");
+      mutate();
+      // Force refresh to clear any cached UI states
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error: any) {
+      toast.error(error.message || "Error resetting database");
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -434,6 +454,52 @@ export default function VouchersPage() {
                 </div>
               }
             />
+          </CardContent>
+        </Card>
+      )}
+      {/* System Maintenance (Admin Only) */}
+      {userRole === "ADMIN" && (
+        <Card className="border-red-200 bg-red-50/30 dark:bg-red-900/10">
+          <CardContent className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                System Maintenance
+              </h3>
+              <p className="text-sm text-red-600/80 mt-1">
+                Wipe all transaction data, assets, and logs. This action is permanent.
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  className="bg-red-600 hover:bg-red-700 shadow-sm"
+                  disabled={isResetting}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Reset Database
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="border-red-200">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-red-800">Extreme Caution Required</AlertDialogTitle>
+                  <AlertDialogDescription className="text-slate-600">
+                    This will delete **EVERYTHING** (Vouchers, Donations, Bank Records, Assets, GL Postings) 
+                    except for User accounts. This action is **IMMEDIATE** and **IRREVERSIBLE**.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleResetDatabase}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Yes, Delete All Data
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       )}

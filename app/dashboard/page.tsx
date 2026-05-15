@@ -525,6 +525,49 @@ export default function DashboardPage() {
         </Card>
       )}
 
+      {/* Quick Financial Summary for Admin/Accountant */}
+      {["ADMIN", "ACCOUNTANT"].includes(userRole) && (
+        <Card className="border-t-4 border-t-primary shadow-sm">
+          <CardHeader>
+            <CardTitle>Financial Snapshot</CardTitle>
+            <CardDescription>Quick overview of trust finances</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-xs font-bold text-emerald-600 uppercase">Cash in Hand</p>
+                <p className="text-xl font-black text-emerald-900 mt-1">₹{stats.totalCashOnHand.toLocaleString()}</p>
+              </div>
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <p className="text-xs font-bold text-blue-600 uppercase">Bank Balance</p>
+                <p className="text-xl font-black text-blue-900 mt-1">₹{stats.totalBankBalance.toLocaleString()}</p>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                <p className="text-xs font-bold text-amber-600 uppercase">Pending Approvals</p>
+                <p className="text-xl font-black text-amber-900 mt-1">{stats.pendingApprovals}</p>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <Link href="/dashboard/reports">
+                <Button className="bg-primary hover:bg-primary/90">
+                  View Full Reports
+                </Button>
+              </Link>
+              <Link href="/dashboard/cash-book">
+                <Button variant="outline" className="border-primary/20 text-primary">
+                  Cash Book
+                </Button>
+              </Link>
+              <Link href="/dashboard/bank-passbook">
+                <Button variant="outline" className="border-primary/20 text-primary">
+                  Bank Passbook
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Role-specific Information */}
       {userRole === "MEMBER" && (
         <Card className="bg-primary/5 border-primary/20 shadow-none">

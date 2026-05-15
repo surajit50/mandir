@@ -27,6 +27,7 @@ interface Cheque {
     accountNumber: string;
   };
   createdAt: string;
+  voucherStatus?: string | null;
 }
 
 export default function ChequeRegisterPage() {
@@ -55,7 +56,9 @@ export default function ChequeRegisterPage() {
   });
 
   const statusConfig: Record<string, { icon: any; color: string; bgColor: string }> = {
+    AVAILABLE: { icon: Clock, color: "text-slate-600", bgColor: "bg-slate-100" },
     ISSUED: { icon: Clock, color: "text-yellow-600", bgColor: "bg-yellow-100" },
+    RECEIVED: { icon: Clock, color: "text-purple-600", bgColor: "bg-purple-100" },
     DEPOSITED: { icon: AlertCircle, color: "text-blue-600", bgColor: "bg-blue-100" },
     CLEARED: { icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
     BOUNCED: { icon: XCircle, color: "text-red-600", bgColor: "bg-red-100" },
@@ -64,7 +67,9 @@ export default function ChequeRegisterPage() {
 
   const stats = {
     total: cheques?.length || 0,
+    available: cheques?.filter((c) => c.status === "AVAILABLE").length || 0,
     issued: cheques?.filter((c) => c.status === "ISSUED").length || 0,
+    received: cheques?.filter((c) => c.status === "RECEIVED").length || 0,
     deposited: cheques?.filter((c) => c.status === "DEPOSITED").length || 0,
     cleared: cheques?.filter((c) => c.status === "CLEARED").length || 0,
     bounced: cheques?.filter((c) => c.status === "BOUNCED").length || 0,
@@ -199,7 +204,7 @@ export default function ChequeRegisterPage() {
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
-        {["ALL", "ISSUED", "DEPOSITED", "CLEARED", "BOUNCED", "CANCELLED"].map((status) => (
+        {["ALL", "AVAILABLE", "ISSUED", "RECEIVED", "DEPOSITED", "CLEARED", "BOUNCED", "CANCELLED"].map((status) => (
           <Button
             key={status}
             variant={filter === status ? "default" : "outline"}
@@ -283,7 +288,9 @@ export default function ChequeRegisterPage() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex gap-2 justify-center">
-                            {cheque.status === "ISSUED" && !isBlank && (
+                            {["ISSUED", "RECEIVED", "DEPOSITED"].includes(cheque.status) && 
+                             !isBlank && 
+                             cheque.voucherStatus === "APPROVED" && (
                               <>
                                 <Button
                                   size="sm"
@@ -291,7 +298,7 @@ export default function ChequeRegisterPage() {
                                   onClick={() => setEncashingCheque(cheque)}
                                   className="text-green-600 hover:text-green-700"
                                 >
-                                  Encash
+                                  Clear
                                 </Button>
                                 <Button
                                   size="sm"

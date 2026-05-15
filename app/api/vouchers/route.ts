@@ -102,28 +102,22 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Cheque validation (PAYMENT + CHEQUE method) ───────────────────────
-    let selectedCheque: { id: string; chequeNumber: string; amount: number; paymentVouchers: { id: string }[] } | null = null;
+    let selectedCheque: { id: string; chequeNumber: string; paymentVouchers: { id: string }[] } | null = null;
 
     if (data.voucherType === "PAYMENT" && data.paymentMethod === "CHEQUE") {
       if (!data.chequeId) {
         return NextResponse.json({ error: "Please select a cheque from the cheque register" }, { status: 400 });
       }
       selectedCheque = await prisma.chequeRegister.findFirst({
-        where: { id: data.chequeId, status: "ISSUED" },
+        where: { id: data.chequeId, status: { in: ["AVAILABLE"] } },
         select: {
           id: true,
           chequeNumber: true,
-          amount: true,
           paymentVouchers: { select: { id: true } }, // check existing links
         },
       });
       if (!selectedCheque) {
         return NextResponse.json({ error: "Selected cheque is invalid or no longer available" }, { status: 400 });
-      }
-      // A cheque is "unassigned" if it has no linked payment vouchers AND amount is 0
-      const isUnassigned = selectedCheque.paymentVouchers.length === 0 && selectedCheque.amount === 0;
-      if (!isUnassigned && selectedCheque.amount !== data.amount) {
-        return NextResponse.json({ error: "Voucher amount must match cheque amount" }, { status: 400 });
       }
     }
 
@@ -147,16 +141,14 @@ export async function POST(request: NextRequest) {
           voucherType: data.voucherType,
           payeeId: payee!.id,
           amount: data.amount,
-          description:
-            data.paymentMethod === "CHEQUE" && selectedCheque
-              ? `${data.description} (Cheque #${selectedCheque.chequeNumber})`
-              : data.description,
+          description: data.description, // User's description only — cheque/bank details stored in dedicated fields
           paymentMethod: data.paymentMethod,
           bankAccountId: data.bankAccountId || null,
           chequeId: data.chequeId || null,
           category: data.category,
           referenceNumber: data.referenceNumber,
           referenceDate: data.referenceDate ? new Date(data.referenceDate) : undefined,
+          receivedChequeBank: data.receivedChequeBank || null, // Payer's bank for RECEIPT+CHEQUE
           metalType: data.metalType,
           weight: data.weight,
           purity: data.purity,
@@ -166,26 +158,42 @@ export async function POST(request: NextRequest) {
         include: { payee: { select: { id: true, name: true, email: true } } },
       });
 
-      // 2. Update unassigned cheque leaf details (only amount, no payeeName)
+      // 2. Update cheque status to ISSUED if it was AVAILABLE
       if (selectedCheque) {
         await tx.chequeRegister.update({
           where: { id: selectedCheque.id },
-          data: { amount: data.amount },
+          data: { status: "ISSUED" },
         });
       }
 
       // 3. Register received cheque in cheque register (RECEIPT + CHEQUE)
       if (data.voucherType === "RECEIPT" && data.paymentMethod === "CHEQUE" && data.referenceNumber && data.bankAccountId) {
-        await tx.chequeRegister.create({
-          data: {
-            chequeNumber: data.referenceNumber,
-            chequeDate: data.referenceDate ? new Date(data.referenceDate) : new Date(data.voucherDate),
-            amount: data.amount,
-            chequeType: "RECEIVED",
-            status: "DEPOSITED",
-            accountId: data.bankAccountId,
-            financialYearId: currentFY?.id,
-          },
+        // Check if cheque already registered (maybe by another process or legacy)
+        let receivedCheque = await tx.chequeRegister.findUnique({
+          where: {
+            accountId_chequeNumber: {
+              accountId: data.bankAccountId,
+              chequeNumber: data.referenceNumber,
+            }
+          }
+        });
+
+        if (!receivedCheque) {
+          receivedCheque = await tx.chequeRegister.create({
+            data: {
+              chequeNumber: data.referenceNumber,
+              chequeType: "RECEIVED",
+              status: "RECEIVED",
+              accountId: data.bankAccountId,
+              financialYearId: currentFY?.id,
+            },
+          });
+        }
+
+        // Link the voucher to this cheque
+        await tx.paymentVoucher.update({
+          where: { id: v.id },
+          data: { chequeId: receivedCheque.id }
         });
       }
 
@@ -197,7 +205,10 @@ export async function POST(request: NextRequest) {
             amount: data.amount,
             type: "CREDIT",
             description: `${v.voucherNumber} – ${data.description}`,
+            instrumentType: data.paymentMethod,
+            instrumentNumber: data.referenceNumber,
             voucherId: v.id,
+            financialYearId: currentFY?.id, // Financial year consistency
             transactionDate: new Date(data.voucherDate),
           },
         });

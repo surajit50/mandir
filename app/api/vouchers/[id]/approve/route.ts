@@ -74,7 +74,9 @@ export async function POST(
       // ══════════════════════════════════════════════════════════════════
       if (isApproving) {
         // ── 1. Negative balance guard ────────────────────────────────
-        if (isPayment) {
+        // For CHEQUE vouchers, skip bank/cash balance check on approval
+        // because the actual debit/credit happens only on encashment.
+        if (isPayment && voucher.paymentMethod !== "CHEQUE") {
           if (useBank) {
             const bankAccount = await tx.bankAccount.findUnique({
               where: { id: voucher.bankAccountId! },
@@ -91,11 +93,6 @@ export async function POST(
             }
           } else {
             // Cash payment – check aggregate cash book balance
-            const latestCash = await tx.cashBook.findFirst({
-              orderBy: { date: "desc" },
-              select: { balance: true },
-            });
-            // Compute running balance from debits and credits
             const agg = await tx.cashBook.aggregate({
               _sum: { creditAmount: true, debitAmount: true },
             });
@@ -123,19 +120,28 @@ export async function POST(
         });
 
         // ── 3. Bank balance change ──────────────────────────────────
-        if (useBank) {
+        // For CHEQUE method: BankTransaction and balance update are deferred
+        // to the cheque ENCASHMENT step. The cheque has not cleared yet.
+        if (useBank && voucher.paymentMethod !== "CHEQUE") {
           const existingBankTx = await tx.bankTransaction.findFirst({
             where: { voucherId: id },
           });
 
           if (!existingBankTx) {
+            // Determine instrument details
+            let instrumentType = voucher.paymentMethod as string;
+            let instrumentNumber = voucher.referenceNumber;
+
             await tx.bankTransaction.create({
               data: {
                 bankAccountId: voucher.bankAccountId!,
                 amount: voucher.amount,
                 type: isPayment ? "DEBIT" : "CREDIT",
                 description: `${voucher.voucherNumber} – ${voucher.description}`,
+                instrumentType,
+                instrumentNumber,
                 voucherId: id,
+                financialYearId: currentFY?.id, // Financial year consistency
                 transactionDate: voucher.voucherDate,
               },
             });
@@ -151,28 +157,36 @@ export async function POST(
           }
         }
 
-        // ── 4. CashBook entry ───────────────────────────────────────
-        const existingCashEntry = await tx.cashBook.findFirst({
-          where: { paymentVoucherId: id },
-        });
-
-        if (!existingCashEntry) {
-          await tx.cashBook.create({
-            data: {
-              date: voucher.voucherDate,
-              description: `${voucher.voucherType} – ${voucher.payee.name} (${voucher.description})`,
-              debitAmount: isPayment ? voucher.amount : 0,
-              creditAmount: isReceipt ? voucher.amount : 0,
-              balance: 0, // running balance computed separately by ledger
-              referenceType: "PaymentVoucher",
-              referenceId: id,
-              paymentVoucherId: id,
-              financialYearId: currentFY?.id,
-            },
+        // ── 4. CashBook entry (Only for cash vouchers or bank withdrawals) ──
+        const isBankWithdrawal = isReceipt && voucher.paymentMethod === "CASH" && useBank;
+        if (useCash || isBankWithdrawal) {
+          const existingCashEntry = await tx.cashBook.findFirst({
+            where: { paymentVoucherId: id },
           });
+
+          if (!existingCashEntry) {
+            await tx.cashBook.create({
+              data: {
+                date: voucher.voucherDate,
+                description: isBankWithdrawal 
+                  ? `Bank Withdrawal (${voucher.bankAccount?.bankName}) – ${voucher.voucherNumber}`
+                  : `${voucher.voucherType} – ${voucher.payee.name} (${voucher.description})`,
+                debitAmount: isPayment ? voucher.amount : 0,
+                creditAmount: isReceipt ? voucher.amount : 0,
+                balance: 0, // running balance computed separately by ledger
+                referenceType: "PaymentVoucher",
+                referenceId: id,
+                paymentVoucherId: id,
+                financialYearId: currentFY?.id,
+              },
+            });
+          }
         }
 
         // ── 5. GL double-entry posting ──────────────────────────────
+        // For CHEQUE vouchers: GL posting records the accounting event on approval,
+        // but bank balance is only updated on encashment.
+        const isChequeMethod = voucher.paymentMethod === "CHEQUE";
         const primaryAccountCode = useBank ? "1002" : "1001";
         const primaryAccountName = useBank ? "Bank Account" : "Cash Account";
         const categoryCode = voucher.category
@@ -181,9 +195,13 @@ export async function POST(
         const categoryName = voucher.category ?? (isReceipt ? "General Income" : "General Expense");
         const categoryType = isReceipt ? "Income" : "Expense";
 
+        const glDescription = isChequeMethod
+          ? `Voucher ${voucher.voucherNumber} – ${voucher.description} (Cheque – pending encashment)`
+          : `Voucher ${voucher.voucherNumber} – ${voucher.description}`;
+
         await postTransaction(tx, {
           date: voucher.voucherDate,
-          description: `Voucher ${voucher.voucherNumber} – ${voucher.description}`,
+          description: glDescription,
           referenceType: "PaymentVoucher",
           referenceId: id,
           financialYearId: currentFY?.id,
@@ -273,8 +291,7 @@ export async function POST(
           await tx.chequeRegister.update({
             where: { id: voucher.chequeId },
             data: {
-              amount: 0,
-              status: "ISSUED", // Ensure it's back to ISSUED
+              status: "AVAILABLE", // Ensure it's back to AVAILABLE for reuse
             },
           });
         }

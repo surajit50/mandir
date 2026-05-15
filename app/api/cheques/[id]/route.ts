@@ -18,10 +18,18 @@ export async function GET(
       );
     }
 
-    const cheque = await prisma.chequeRegister.findUnique({
+    const cheque: any = await prisma.chequeRegister.findUnique({
       where: { id },
       include: {
         account: { select: { id: true, bankName: true, accountNumber: true } },
+        paymentVouchers: {
+          take: 1,
+          select: { 
+            amount: true,
+            referenceDate: true,
+            payee: { select: { name: true } } 
+          },
+        },
       },
     });
 
@@ -32,7 +40,12 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(cheque);
+    const { paymentVouchers, ...rest } = cheque;
+    const amount = paymentVouchers[0]?.amount || 0;
+    const chequeDate = paymentVouchers[0]?.referenceDate || cheque.createdAt;
+    const payeeName = paymentVouchers[0]?.payee?.name || "Unknown";
+
+    return NextResponse.json({ ...rest, amount, chequeDate, payeeName });
   } catch (error) {
     console.error("Cheque fetch error:", error);
     return NextResponse.json(
@@ -77,9 +90,9 @@ export async function PATCH(
       );
     }
 
-    if (cheque.status !== "ISSUED") {
+    if (!["AVAILABLE", "ISSUED", "RECEIVED"].includes(cheque.status)) {
       return NextResponse.json(
-        { error: "Only issued cheques can be cancelled" },
+        { error: `Cheques in ${cheque.status} status cannot be cancelled` },
         { status: 400 }
       );
     }

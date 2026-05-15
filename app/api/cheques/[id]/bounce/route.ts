@@ -41,6 +41,7 @@ export async function POST(
     // Find the cheque
     const cheque = await prisma.chequeRegister.findUnique({
       where: { id },
+      include: { paymentVouchers: { select: { amount: true } } }
     });
 
     if (!cheque) {
@@ -73,12 +74,28 @@ export async function POST(
       const isReceived = updated.chequeType === "RECEIVED";
 
       // Reverse bank account balance
+      const voucher = updated.paymentVouchers[0];
+      const amount = voucher?.amount || 0;
+
       await tx.bankAccount.update({
         where: { id: updated.accountId },
         data: {
           currentBalance: {
-            [isReceived ? "decrement" : "increment"]: updated.amount,
+            [isReceived ? "decrement" : "increment"]: amount,
           },
+        },
+      });
+
+      // Create reversing BankTransaction
+      await tx.bankTransaction.create({
+        data: {
+          bankAccountId: updated.accountId,
+          amount: amount,
+          type: isReceived ? "DEBIT" : "CREDIT",
+          description: `BOUNCE REVERSAL: #${updated.chequeNumber} - ${validatedData.bounceReason}`,
+          instrumentType: "BOUNCE",
+          instrumentNumber: updated.chequeNumber,
+          transactionDate: new Date(validatedData.bounceDate),
         },
       });
 
@@ -92,8 +109,8 @@ export async function POST(
           data: {
             date: new Date(validatedData.bounceDate),
             description: `Cheque Bounce Reversal: #${updated.chequeNumber} - ${validatedData.bounceReason}`,
-            debitAmount: isReceived ? updated.amount : 0, 
-            creditAmount: !isReceived ? updated.amount : 0,
+            debitAmount: isReceived ? amount : 0, 
+            creditAmount: !isReceived ? amount : 0,
             balance: 0,
             referenceType: "ChequeBounce",
             referenceId: id,
@@ -102,7 +119,6 @@ export async function POST(
       }
 
       // Reverse GL Posting if there is an associated voucher
-      const voucher = updated.paymentVouchers[0];
       if (voucher && voucher.status === "APPROVED") {
         const primaryAccountCode = "1002"; // Bank Account
         const primaryAccountName = "Bank Account";

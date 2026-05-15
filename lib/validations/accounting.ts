@@ -51,12 +51,13 @@ export const PaymentVoucherSchema = z.object({
   ]).optional().default("OTHER"),
   amount: z.coerce.number().positive("Amount must be greater than 0"),
   description: z.string().min(1, "Description is required"),
-  paymentMethod: z.enum(["CASH", "CHEQUE", "BANK_TRANSFER", "ONLINE"]),
+  paymentMethod: z.enum(["CASH", "CHEQUE", "BANK_TRANSFER", "ONLINE", "PFMS", "CASH_DEPOSIT", "BANK_CHARGES"]),
   chequeId: z.string().optional(),
   bankAccountId: z.string().optional(),
   category: z.string().optional(),
   referenceNumber: z.string().optional(),
   referenceDate: z.string().optional(),
+  receivedChequeBank: z.string().optional(), // Payer's bank name for RECEIPT+CHEQUE
   metalType: z.string().optional(),
   weight: z.coerce.number().optional(),
   purity: z.string().optional(),
@@ -106,14 +107,10 @@ export type BankReconciliationFormValues = z.infer<typeof BankReconciliationSche
 // ─────────────────────────────────────────────────────────────
 export const SingleChequeSchema = z.object({
   chequeNumber: z.string().min(1, "Cheque number is required"),
-  chequeBookNumber: z.string().optional(),
-  chequeDate: z.string().min(1, "Cheque date is required"),
-  amount: z.coerce.number().positive("Amount must be greater than 0"),
-  payeeName: z.string().min(1, "Payee name is required"),
   accountId: z.string().min(1, "Account is required"),
   status: z
-    .enum(["ISSUED", "DEPOSITED", "CLEARED", "BOUNCED", "CANCELLED"])
-    .default("ISSUED"),
+    .enum(["AVAILABLE", "ISSUED", "RECEIVED", "DEPOSITED", "CLEARED", "BOUNCED", "CANCELLED"])
+    .default("AVAILABLE"),
 });
 export type SingleChequeFormValues = z.infer<typeof SingleChequeSchema>;
 
@@ -128,7 +125,6 @@ export const ChequeBookSchema = z.object({
     .number()
     .int()
     .min(20, "Cheque book must have at least 20 leaves"),
-  chequeDate: z.string().optional(),
 });
 export type ChequeBookFormValues = z.infer<typeof ChequeBookSchema>;
 

@@ -42,8 +42,6 @@ export async function GET(
         cheque: {
           select: {
             chequeNumber: true,
-            chequeDate: true,
-            amount: true,
           },
         },
       },
@@ -81,7 +79,7 @@ export async function GET(
       createdAt: voucher.createdAt,
       payee: voucher.payee,
       bankAccount: voucher.bankAccount,
-      cheque: voucher.cheque,
+
     });
 
     const pdf = await renderPdfmePdf(
@@ -132,10 +130,10 @@ function generateVoucherHTML(voucher: {
 
   const approvedDate = voucher.approvedAt
     ? new Date(voucher.approvedAt).toLocaleDateString("en-IN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      })
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
     : "Not Approved";
 
   const title =

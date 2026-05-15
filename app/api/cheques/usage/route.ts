@@ -31,11 +31,10 @@ export async function GET(request: NextRequest) {
         id: true,
         chequeNumber: true,
         status: true,
-        amount: true,
-        chequeDate: true,
+        createdAt: true,
         paymentVouchers: {
           take: 1,
-          select: { payee: { select: { name: true } } },
+          select: { amount: true, referenceDate: true, payee: { select: { name: true } } },
         },
       },
       orderBy: { chequeNumber: 'asc' },
@@ -73,8 +72,8 @@ export async function GET(request: NextRequest) {
         used: !!existing,
         status: existing?.status,
         payee: existing ? chequePayeeDisplayName(existing) : undefined,
-        amount: existing?.amount,
-        date: existing?.chequeDate?.toISOString(),
+        amount: existing?.paymentVouchers[0]?.amount || 0,
+        date: existing?.paymentVouchers[0]?.referenceDate || existing?.createdAt,
         id: existing?.id,
       });
     }

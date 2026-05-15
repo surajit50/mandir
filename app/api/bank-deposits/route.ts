@@ -63,9 +63,9 @@ export async function POST(request: NextRequest) {
     if (validatedData.chequeIds && validatedData.chequeIds.length > 0) {
       const linkedCheques = await prisma.chequeRegister.findMany({
         where: { id: { in: validatedData.chequeIds } },
-        select: { amount: true },
+        include: { paymentVouchers: { select: { amount: true } } },
       });
-      chequeTotal = linkedCheques.reduce((sum: number, cheque: any) => sum + cheque.amount, 0);
+      chequeTotal = linkedCheques.reduce((sum: number, c: any) => sum + (c.paymentVouchers[0]?.amount || 0), 0);
     }
     const cashPortion = Math.max(0, validatedData.totalAmount - chequeTotal);
 
@@ -122,6 +122,9 @@ export async function POST(request: NextRequest) {
           });
         }
       }
+
+      // Note: Bank balance update and BankTransaction record are now handled 
+      // exclusively in the /verify route to prevent double counting.
 
       // ===== NEW: Double-Entry GL Posting =====
       const entries: { accountCode: string, accountName: string, accountType: string, debit?: number, credit?: number }[] = [];

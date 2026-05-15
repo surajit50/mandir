@@ -25,14 +25,24 @@ export async function GET(req: NextRequest) {
       orderBy: { accountCode: "asc" },
     });
 
-    const enriched = accounts.map((acc: any) => ({
-      ...acc,
-      totalDebits: acc.postings.reduce((sum: number, p: any) => sum + p.debitAmount, 0),
-      totalCredits: acc.postings.reduce((sum: number, p: any) => sum + p.creditAmount, 0),
-      runningBalance:
-        acc.openingBalance +
-        acc.postings.reduce((sum: number, p: any) => sum + p.creditAmount - p.debitAmount, 0),
-    }));
+    const enriched = accounts.map((acc: any) => {
+      const totalDebits = acc.postings.reduce((sum: number, p: any) => sum + p.debitAmount, 0);
+      const totalCredits = acc.postings.reduce((sum: number, p: any) => sum + p.creditAmount, 0);
+      // For Asset/Expense: opening + debits - credits
+      // For Liability/Equity/Income: opening + credits - debits
+      let runningBalance;
+      if (['Asset', 'Expense'].includes(acc.accountType)) {
+        runningBalance = acc.openingBalance + totalDebits - totalCredits;
+      } else {
+        runningBalance = acc.openingBalance + totalCredits - totalDebits;
+      }
+      return {
+        ...acc,
+        totalDebits,
+        totalCredits,
+        runningBalance,
+      };
+    });
 
     return NextResponse.json(enriched);
   } catch (error) {

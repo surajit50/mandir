@@ -7,11 +7,8 @@ import { z } from "zod";
 
 const ChequeSchema = z.object({
   chequeNumber: z.string().min(1, "Cheque number is required"),
-  chequeBookNumber: z.string().optional(),
-  chequeDate: z.string().datetime(),
-  amount: z.number().min(0, "Amount must be 0 or greater"),
   accountId: z.string().min(1, "Account is required"),
-  status: z.enum(["ISSUED", "DEPOSITED", "CLEARED", "BOUNCED", "CANCELLED"]).default("ISSUED"),
+  status: z.enum(["AVAILABLE", "ISSUED", "RECEIVED", "DEPOSITED", "CLEARED", "BOUNCED", "CANCELLED"]).default("AVAILABLE"),
 });
 
 const ChequeBookSchema = z.object({
@@ -19,7 +16,6 @@ const ChequeBookSchema = z.object({
   chequeBookNumber: z.string().optional(),
   startChequeNumber: z.string().regex(/^\d+$/, "Start cheque number must be numeric"),
   leafCount: z.number().int().min(20, "Cheque book must have at least 20 leaves"),
-  chequeDate: z.string().datetime().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -53,9 +49,6 @@ export async function POST(request: NextRequest) {
       const validatedBook = ChequeBookSchema.parse(body);
       const startNumber = parseInt(validatedBook.startChequeNumber, 10);
       const numberWidth = validatedBook.startChequeNumber.length;
-      const chequeDate = validatedBook.chequeDate
-        ? new Date(validatedBook.chequeDate)
-        : new Date();
 
       const chequeNumbers = Array.from(
         { length: validatedBook.leafCount },
@@ -81,23 +74,30 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const cheques = await prisma.$transaction(async (tx: any) => {
+      const result = await prisma.$transaction(async (tx: any) => {
+        // Create ChequeBook record
+        const book = await tx.chequeBook.create({
+          data: {
+            accountId: validatedBook.accountId,
+            bookNumber: validatedBook.chequeBookNumber || null,
+            startChequeNo: validatedBook.startChequeNumber,
+            leafCount: validatedBook.leafCount,
+          }
+        });
+
         await tx.chequeRegister.createMany({
           data: chequeNumbers.map((chequeNumber: string) => ({
             chequeNumber,
-            chequeBookNumber: validatedBook.chequeBookNumber || null,
-            chequeDate,
-            amount: 0, // Blank leaves have 0 amount
+            chequeBookId: book.id,
             accountId: validatedBook.accountId,
-            status: "ISSUED",
+            status: "AVAILABLE",
             financialYearId: currentFY?.id,
           })),
         });
 
         const createdCheques = await tx.chequeRegister.findMany({
           where: {
-            accountId: validatedBook.accountId,
-            chequeNumber: { in: chequeNumbers },
+            chequeBookId: book.id,
           },
           include: {
             account: { select: { id: true, bankName: true, accountNumber: true } },
@@ -112,21 +112,22 @@ export async function POST(request: NextRequest) {
             userName: session.user.name ?? "Unknown User",
             userRole: userRole,
             action: "CREATE",
-            module: "ChequeRegister",
-            entityId: createdCheques[0].id,
+            module: "ChequeBook",
+            entityId: book.id,
             entityType: "ChequeBook",
             status: "SUCCESS",
           },
         });
 
-        return createdCheques;
+        return { book, cheques: createdCheques };
       });
 
       return NextResponse.json(
         {
           mode: "BOOK",
-          count: cheques.length,
-          cheques: cheques,
+          count: result.cheques.length,
+          chequeBook: result.book,
+          cheques: result.cheques,
         },
         { status: 201 },
       );
@@ -154,9 +155,6 @@ export async function POST(request: NextRequest) {
     const cheque = await prisma.chequeRegister.create({
       data: {
         chequeNumber: validatedData.chequeNumber,
-        chequeBookNumber: validatedData.chequeBookNumber || null,
-        chequeDate: new Date(validatedData.chequeDate),
-        amount: validatedData.amount,
         accountId: validatedData.accountId,
         status: validatedData.status,
         financialYearId: currentFY?.id,
@@ -223,32 +221,44 @@ export async function GET(request: NextRequest) {
               },
             },
           }
-        : {
-            // Exclude blank cheque leaves (amount = 0 and not linked to any voucher)
-            OR: [
-              { amount: { gt: 0 } },
-              {
-                paymentVouchers: {
-                  some: {},
-                },
-              },
-            ],
-          },
+        : {},
       include: {
         account: { select: { id: true, bankName: true, accountNumber: true } },
+        chequeBook: { select: { bookNumber: true } },
         paymentVouchers: {
           take: 1,
-          select: { payee: { select: { name: true } } },
+          select: { 
+            amount: true,
+            status: true,
+            referenceDate: true,
+            payee: { select: { name: true } } 
+          },
         },
+        deposit: {
+          select: { remarks: true, totalAmount: true }
+        }
       },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json(
       cheques.map((c: any) => {
-        const payeeName = chequePayeeDisplayName(c);
-        const { paymentVouchers: _pv, ...rest } = c;
-        return { ...rest, payeeName };
+        let payeeName = chequePayeeDisplayName(c);
+        if (payeeName === "Unknown" && c.deposit?.remarks) {
+          payeeName = c.deposit.remarks;
+        }
+        
+        let amount = c.paymentVouchers[0]?.amount || 0;
+        if (amount === 0 && c.deposit?.totalAmount && c.chequeType === "RECEIVED") {
+          // If it's a received cheque and we have no voucher amount, use deposit amount 
+          // (Caution: deposit might have multiple cheques, but this is a better fallback than 0)
+          amount = c.deposit.totalAmount;
+        }
+
+        const chequeDate = c.paymentVouchers[0]?.referenceDate || c.clearedDate || c.createdAt;
+        const voucherStatus = c.paymentVouchers[0]?.status || null;
+        const { paymentVouchers: _pv, deposit: _d, ...rest } = c;
+        return { ...rest, payeeName, amount, chequeDate, voucherStatus };
       }),
     );
   } catch (error) {

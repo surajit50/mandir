@@ -81,8 +81,14 @@ export async function POST(
         // Move linked cheques from ISSUED -> CLEARED (Received cheques are cleared when deposit is verified)
         const linkedCheques = await tx.chequeRegister.findMany({
           where: { depositId: id },
-          select: { id: true },
+          include: { 
+            paymentVouchers: {
+              take: 1,
+              select: { id: true, voucherNumber: true }
+            }
+          }
         });
+
         if (linkedCheques.length > 0) {
           await tx.chequeRegister.updateMany({
             where: { id: { in: linkedCheques.map((c: any) => c.id) } },
@@ -92,6 +98,22 @@ export async function POST(
             },
           });
         }
+
+        // Create BankTransaction entry for the passbook
+        await tx.bankTransaction.create({
+          data: {
+            bankAccountId: deposit.accountId,
+            amount: deposit.totalAmount,
+            type: "CREDIT",
+            description: deposit.remarks || `Deposit verified – ${deposit.depositNumber}`,
+            transactionDate: new Date(),
+            referenceType: "BankDeposit",
+            referenceId: id,
+            instrumentType: deposit.depositType,
+            instrumentNumber: deposit.depositNumber,
+            financialYearId: deposit.financialYearId,
+          },
+        });
       });
     } else {
       // REJECTED - undo the deposit
@@ -106,6 +128,36 @@ export async function POST(
 
       // Remove cash book entries (cash goes back to available)
       await prisma.cashBook.deleteMany({
+        where: { referenceType: "BankDeposit", referenceId: deposit.id },
+      });
+
+      // ── GL Reversal ───────────────────────────────────────────────
+      // Find GL Postings and reverse the balance changes
+      const postings = await prisma.gLPosting.findMany({
+        where: { referenceType: "BankDeposit", referenceId: deposit.id },
+      });
+
+      for (const posting of postings) {
+        const account = await prisma.gLAccount.findUnique({ where: { id: posting.accountId } });
+        if (account) {
+          let reverseChange = 0;
+          if (["Asset", "Expense"].includes(account.accountType)) {
+            // Original: debit - credit. Reverse: credit - debit
+            reverseChange = posting.creditAmount - posting.debitAmount;
+          } else {
+            // Original: credit - debit. Reverse: debit - credit
+            reverseChange = posting.debitAmount - posting.creditAmount;
+          }
+
+          await prisma.gLAccount.update({
+            where: { id: account.id },
+            data: { currentBalance: { increment: reverseChange } },
+          });
+        }
+      }
+
+      // Delete GL Postings
+      await prisma.gLPosting.deleteMany({
         where: { referenceType: "BankDeposit", referenceId: deposit.id },
       });
 
