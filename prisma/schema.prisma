@@ -246,6 +246,10 @@ model PaymentVoucher {
   referenceNumber String?
   referenceDate   DateTime?
 
+  // For RECEIPT + CHEQUE: the payer's bank name (e.g., "State Bank of India")
+  // Stored separately so description stays clean.
+  receivedChequeBank String?
+
   // Jewellery details (for RECEIPT vouchers of jewellery donations)
   metalType String? // Gold, Silver
   weight    Float? // In Grams
@@ -295,6 +299,9 @@ enum PaymentMethod {
   CHEQUE
   BANK_TRANSFER
   ONLINE
+  PFMS
+  CASH_DEPOSIT
+  BANK_CHARGES
 }
 
 enum VoucherStatus {
@@ -351,6 +358,7 @@ model BankAccount {
   // relations (keep exactly as before)
   bankTransactions BankTransaction[]
   chequeRegisters  ChequeRegister[]
+  chequeBooks      ChequeBook[]
   vouchers         PaymentVoucher[]     @relation("VoucherBankAccount")
   deposits         BankDeposit[]
   reconciliations  BankReconciliation[]
@@ -402,18 +410,39 @@ enum DepositStatus {
 // CHEQUE REGISTER MODELS
 // ============================================
 
+model ChequeBook {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  accountId        String   @db.ObjectId
+  account          BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  bookNumber       String?  // The "Cheque Book No" from screenshot
+  startChequeNo    String
+  leafCount        Int
+  
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  cheques          ChequeRegister[]
+  
+  @@index([accountId])
+}
+
 model ChequeRegister {
   id        String      @id @default(auto()) @map("_id") @db.ObjectId
   accountId String      @db.ObjectId
   account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
-  chequeNumber     String
-  chequeBookNumber String?
-  chequeDate       DateTime
-  amount           Float
-  chequeType       ChequeType @default(ISSUED)
+  chequeNumber String
 
-  status       ChequeStatus @default(ISSUED)
+  // Link to ChequeBook
+  chequeBookId String?     @db.ObjectId
+  chequeBook   ChequeBook? @relation(fields: [chequeBookId], references: [id])
+
+  chequeType ChequeType @default(ISSUED)
+
+  // Status and tracking fields (Moved transactional fields like amount/date/payee to PaymentVoucher/BankTransaction)
+  status       ChequeStatus @default(AVAILABLE)
   clearedDate  DateTime?
   bounceDate   DateTime?
   bounceReason String?
@@ -424,21 +453,27 @@ model ChequeRegister {
   financialYearId String?        @db.ObjectId
   financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  paymentVouchers PaymentVoucher[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  paymentVouchers  PaymentVoucher[]
+  bankTransactions BankTransaction[] @relation("ChequeBankTransaction")
 
   @@unique([accountId, chequeNumber])
   @@index([accountId])
   @@index([status])
   @@index([depositId])
+  @@index([chequeBookId])
 }
 
 
 
 
 enum ChequeStatus {
+  AVAILABLE
   ISSUED
+  RECEIVED
   DEPOSITED
   CLEARED
   BOUNCED
@@ -814,6 +849,7 @@ model FinancialYear {
   cashBook            CashBook[]
   bankDeposits        BankDeposit[]
   bankReconciliations BankReconciliation[]
+  bankTransactions    BankTransaction[]
   glPostings          GLPosting[]
   cheques             ChequeRegister[]
 
@@ -981,10 +1017,35 @@ model BankTransaction {
   amount          Float
   type            String // "CREDIT" or "DEBIT"
   description     String?
+
+  // Instrument details
+  instrumentType  String? // "CHEQUE", "PFMS", "TRANSFER", "CASH", "CHARGES", etc.
+  instrumentNumber String? // Cheque number, UTR, Ref No
+
+  // ── Voucher link ──
   voucherId       String?         @db.ObjectId
   paymentVoucher  PaymentVoucher? @relation(fields: [voucherId], references: [id])
+
+  // ── Cheque link (direct reference, avoids voucher-only lookup) ──
+  chequeId        String?         @db.ObjectId
+  cheque          ChequeRegister? @relation("ChequeBankTransaction", fields: [chequeId], references: [id])
+
+  // ── Generic Reference (for BankDeposit, Transfers, etc.) ──
+  referenceType   String?         // "BankDeposit", "Transfer", etc.
+  referenceId     String?         @db.ObjectId
+
+  // ── Financial year ──
+  financialYearId String?        @db.ObjectId
+  financialYear   FinancialYear?  @relation(fields: [financialYearId], references: [id])
+
   transactionDate DateTime        @default(now())
   createdAt       DateTime        @default(now())
+
+  @@index([bankAccountId])
+  @@index([voucherId])
+  @@index([chequeId])
+  @@index([transactionDate])
+  @@index([financialYearId])
 }
 model Counter {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId

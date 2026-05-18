@@ -24,8 +24,14 @@ export function ChequeForm() {
 
   const [formData, setFormData] = useState({
     chequeNumber: "",
+    chequeBookNumber: "",
+    chequeDate: new Date().toISOString().split("T")[0],
+    amount: "",
+    drawee: "",
+    payee: "",
     accountId: "",
-    status: "AVAILABLE",
+    status: "ISSUED",
+    remarks: "",
   });
 
   const [bookData, setBookData] = useState({
@@ -33,6 +39,7 @@ export function ChequeForm() {
     chequeBookNumber: "",
     startChequeNumber: "",
     leafCount: "20",
+    chequeDate: new Date().toISOString().split("T")[0],
   });
 
   const { data: accounts } = useSWR<BankAccount[]>(
@@ -91,6 +98,26 @@ export function ChequeForm() {
       return;
     }
 
+    if (mode === "SINGLE" && !formData.chequeDate) {
+      setError("Cheque date is required");
+      return;
+    }
+
+    if (mode === "SINGLE" && (!formData.amount || parseFloat(formData.amount) <= 0)) {
+      setError("Amount must be greater than 0");
+      return;
+    }
+
+    if (mode === "SINGLE" && !formData.drawee) {
+      setError("Drawee is required");
+      return;
+    }
+
+    if (mode === "SINGLE" && !formData.payee) {
+      setError("Payee is required");
+      return;
+    }
+
     if (mode === "SINGLE" && !formData.accountId) {
       setError("Account is required");
       return;
@@ -110,9 +137,14 @@ export function ChequeForm() {
                 chequeBookNumber: bookData.chequeBookNumber,
                 startChequeNumber: bookData.startChequeNumber,
                 leafCount: parseInt(bookData.leafCount, 10),
+                chequeDate: new Date(bookData.chequeDate).toISOString(),
               }
             : {
                 chequeNumber: formData.chequeNumber,
+                chequeBookNumber: formData.chequeBookNumber,
+                chequeDate: new Date(formData.chequeDate).toISOString(),
+                amount: parseFloat(formData.amount),
+                payeeName: formData.payee,
                 accountId: formData.accountId,
                 status: formData.status,
               },
@@ -203,25 +235,83 @@ export function ChequeForm() {
               </div>
 
               <div>
-                <label htmlFor="accountId" className="text-sm font-medium text-slate-700 block mb-2">
-                  Bank Account
+                <label htmlFor="chequeBookNumber" className="text-sm font-medium text-slate-700 block mb-2">
+                  Cheque Book Number (Optional)
                 </label>
-                <select
-                  id="accountId"
-                  name="accountId"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.accountId}
+                <Input
+                  id="chequeBookNumber"
+                  name="chequeBookNumber"
+                  placeholder="e.g. CB-001"
+                  value={formData.chequeBookNumber}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="chequeDate" className="text-sm font-medium text-slate-700 block mb-2">
+                  Cheque Date
+                </label>
+                <Input
+                  id="chequeDate"
+                  name="chequeDate"
+                  type="date"
+                  value={formData.chequeDate}
                   onChange={handleChange}
                   required
-                >
-                  <option value="">Select an account</option>
-                  {accounts?.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.bankName} - {account.accountNumber}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="amount" className="text-sm font-medium text-slate-700 block mb-2">
+                Amount
+              </label>
+              <Input
+                id="amount"
+                name="amount"
+                type="number"
+                placeholder="0.00"
+                value={formData.amount}
+                onChange={handleChange}
+                required
+                min="0"
+                step="0.01"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="payee" className="text-sm font-medium text-slate-700 block mb-2">
+                Payee
+              </label>
+              <Input
+                id="payee"
+                name="payee"
+                placeholder="Payee name"
+                value={formData.payee}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="accountId" className="text-sm font-medium text-slate-700 block mb-2">
+                Bank Account
+              </label>
+              <select
+                id="accountId"
+                name="accountId"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={formData.accountId}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Select an account</option>
+                {accounts?.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.bankName} - {account.accountNumber}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -235,14 +325,27 @@ export function ChequeForm() {
                 value={formData.status}
                 onChange={handleChange}
               >
-                <option value="AVAILABLE">Available</option>
-                <option value="RECEIVED">Received</option>
                 <option value="ISSUED">Issued</option>
                 <option value="DEPOSITED">Deposited</option>
                 <option value="CLEARED">Cleared</option>
                 <option value="BOUNCED">Bounced</option>
                 <option value="CANCELLED">Cancelled</option>
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="remarks" className="text-sm font-medium text-slate-700 block mb-2">
+                Remarks (Optional)
+              </label>
+              <textarea
+                id="remarks"
+                name="remarks"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                value={formData.remarks}
+                onChange={handleChange}
+                placeholder="Add any notes..."
+              />
             </div>
             </CardContent>
           </Card>
@@ -315,6 +418,19 @@ export function ChequeForm() {
                     type="number"
                     min="20"
                     value={bookData.leafCount}
+                    onChange={handleBookChange}
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="bookChequeDate" className="text-sm font-medium text-slate-700 block mb-2">
+                    Issue Date
+                  </label>
+                  <Input
+                    id="bookChequeDate"
+                    name="chequeDate"
+                    type="date"
+                    value={bookData.chequeDate}
                     onChange={handleBookChange}
                     required
                   />

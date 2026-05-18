@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Build canonical cash-book view:
     // We now rely on the CashBook table which is populated during approval/verification.
-
+    
     // 1) Fetch Cash Account (1001) opening balance
     const cashAccount = await prisma.gLAccount.findUnique({
       where: { accountCode: "1001" },

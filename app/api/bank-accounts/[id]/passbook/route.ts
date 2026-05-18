@@ -114,7 +114,7 @@ export async function GET(
       if (bt.referenceType === "BankDeposit" && bt.referenceId) {
         addedDepositIds.add(bt.referenceId);
       }
-
+      
       rows.push({
         id: `bt-${bt.id}`,
         date: bt.transactionDate,
@@ -137,7 +137,7 @@ export async function GET(
         id: `dep-${d.id}`,
         date: d.depositDate,
         createdAt: d.createdAt,
-        description: d.status === "PENDING"
+        description: d.status === "PENDING" 
           ? `[PENDING] ${d.remarks || `Bank Deposit – ${d.depositNumber}`}`
           : d.remarks || `Bank Deposit – ${d.depositNumber}`,
         creditAmount: d.totalAmount,
@@ -152,7 +152,7 @@ export async function GET(
     // Cleared cheques (only those NOT already in a voucher BankTransaction)
     for (const c of clearedCheques) {
       const isReceived = c.chequeType === "RECEIVED";
-
+      
       // If this cheque is linked to a voucher that's already added, skip it
       const voucherId = c.paymentVouchers[0]?.id;
       if (voucherId && addedVoucherIds.has(voucherId)) continue;

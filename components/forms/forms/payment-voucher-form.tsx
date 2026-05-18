@@ -189,14 +189,10 @@ export function PaymentVoucherForm() {
     return null;
   })();
 
-  // Available cheques (blank leaves for the selected bank account)
+  // Available cheques (issued only)
   const availableCheques =
     cheques
-      ?.filter((cheque) => {
-        const matchesStatus = cheque.status === "AVAILABLE";
-        const matchesBank = !bankAccountId || cheque.account?.id === bankAccountId;
-        return matchesStatus && matchesBank;
-      })
+      ?.filter((cheque) => cheque.status === "ISSUED")
       .sort((a, b) => {
         const numA = parseInt(a.chequeNumber, 10);
         const numB = parseInt(b.chequeNumber, 10);
@@ -632,30 +628,24 @@ export function PaymentVoucherForm() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   value={chequeId}
                   onChange={(e) => handleChequeSelect(e.target.value)}
-                  disabled={!bankAccountId}
                 >
-                  <option value="">
-                    {!bankAccountId
-                      ? "Select bank account first"
-                      : "Select blank cheque leaf"}
-                  </option>
+                  <option value="">Select issued cheque</option>
                   {availableCheques.map((cheque) => (
                     <option key={cheque.id} value={cheque.id}>
-                      #{cheque.chequeNumber}
-                      {cheque.account && !bankAccountId
-                        ? ` · ${cheque.account.bankName}`
-                        : ""}
+                      #{cheque.chequeNumber} — {cheque.payeeName} (₹
+                      {cheque.amount.toLocaleString()})
+                      {cheque.account ? ` · ${cheque.account.bankName}` : ""}
                     </option>
                   ))}
                 </select>
-                {availableCheques.length === 0 && bankAccountId && (
+                {availableCheques.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">
-                    No blank cheques available for this account.{" "}
+                    No issued cheques available.{" "}
                     <Link
                       href="/dashboard/cheques/register"
                       className="text-blue-600 hover:underline"
                     >
-                      Add cheques to register
+                      Open Cheque Register
                     </Link>
                   </p>
                 )}
